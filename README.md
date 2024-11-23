@@ -19,6 +19,8 @@ Run Jex with a JSON file as input:
 jex <JSON_FILE>
 ```
 
+## Example
+
 Given a JSON file data.json:
 
 ```json
