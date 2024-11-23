@@ -229,7 +229,7 @@ func colorizeJSON(jsonStr string) string {
 		for _, match := range matches {
 			key := match[1]
 			value := match[2]
-			coloredValue := value
+			var coloredValue string
 			if strings.HasPrefix(value, `"`) {
 				coloredValue = stringColor(value)
 			} else if value == "true" || value == "false" {
