@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -53,40 +54,62 @@ func (jp *JSONProcessor) startFuzzyFinder() (string, error) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: jex <JSON_FILE>")
-		os.Exit(1)
-	}
+	var jsonStr strings.Builder
 
-	jp := &JSONProcessor{filePath: os.Args[1]}
-
-	if err := jp.readFile(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	jp.extractKeys()
-	if len(jp.keys) == 1 {
-		fmt.Println("Error: No keys found in JSON file.")
-		os.Exit(1)
-	}
-
-	selectedQuery, err := jp.startFuzzyFinder()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(0)
-	}
-
-	if selectedQuery == "" {
-		fmt.Println("Selected Query: (Full JSON)")
+	if len(os.Args) > 1 {
+		filePath := os.Args[1]
+		jp := &JSONProcessor{
+			filePath: filePath,
+		}
+		if err := jp.readFile(); err != nil {
+			fmt.Println(err)
+			return
+		}
+		jsonStr.Write(jp.jsonData)
 	} else {
-		fmt.Printf("Selected Query: %s\n", selectedQuery)
+		// input from pipe
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			fmt.Println("Error stating stdin:", err)
+			return
+		}
+
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				jsonStr.WriteString(scanner.Text() + "\n")
+			}
+			if err := scanner.Err(); err != nil {
+				fmt.Println("Error reading stdin:", err)
+				return
+			}
+		} else {
+			fmt.Println("Usage: jex <JSON_FILE> or cat <JSON_FILE> | jex")
+			return
+		}
 	}
-	fmt.Println("Parsed Result:")
-	fmt.Println(colorizeJSON(getParsedResult(selectedQuery, jp.jsonData)))
+
+	jp := &JSONProcessor{
+		jsonData: []byte(jsonStr.String()),
+	}
+	jp.extractKeys()
+
+	for {
+		query, err := jp.startFuzzyFinder()
+		if err != nil {
+			fmt.Println("Error in fuzzy finder:", err)
+			return
+		}
+		if query == "" {
+			break
+		}
+
+		result := getParsedResult(query, jp.jsonData)
+		fmt.Println(result)
+	}
 }
 
-// uniqueKeys はキーリストから重複を削除します
+// uniqueKeys is a function that removes duplicates from a key list
 func uniqueKeys(keys []string) []string {
 	seen := make(map[string]struct{})
 	var result []string
