@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -53,37 +54,71 @@ func (jp *JSONProcessor) startFuzzyFinder() (string, error) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: jex <JSON_FILE>")
-		os.Exit(1)
-	}
+	var jsonStr strings.Builder
 
-	jp := &JSONProcessor{filePath: os.Args[1]}
+	if len(os.Args) > 1 {
+		// ファイルから読み込む
+		filePath := os.Args[1]
+		file, err := os.Open(filePath)
+		if err != nil {
+			fmt.Println("Error opening file:", err)
+			return
+		}
+		defer file.Close()
 
-	if err := jp.readFile(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	jp.extractKeys()
-	if len(jp.keys) == 1 {
-		fmt.Println("Error: No keys found in JSON file.")
-		os.Exit(1)
-	}
-
-	selectedQuery, err := jp.startFuzzyFinder()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(0)
-	}
-
-	if selectedQuery == "" {
-		fmt.Println("Selected Query: (Full JSON)")
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			jsonStr.WriteString(scanner.Text() + "\n")
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Println("Error reading file:", err)
+			return
+		}
 	} else {
-		fmt.Printf("Selected Query: %s\n", selectedQuery)
+		// 標準入力から読み込む
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			fmt.Println("Error stating stdin:", err)
+			return
+		}
+
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// パイプからの入力
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				jsonStr.WriteString(scanner.Text() + "\n")
+			}
+			if err := scanner.Err(); err != nil {
+				fmt.Println("Error reading stdin:", err)
+				return
+			}
+		} else {
+			fmt.Println("Usage: jex <JSON_FILE> or cat <JSON_FILE> | jex")
+			return
+		}
 	}
-	fmt.Println("Parsed Result:")
-	fmt.Println(colorizeJSON(getParsedResult(selectedQuery, jp.jsonData)))
+
+	// JSONProcessor を作成
+	jp := &JSONProcessor{
+		jsonData: []byte(jsonStr.String()),
+	}
+	jp.extractKeys()
+
+	// インタラクティブにクエリを受け付ける
+	for {
+		query, err := jp.startFuzzyFinder()
+		if err != nil {
+			fmt.Println("Error in fuzzy finder:", err)
+			return
+		}
+		if query == "" {
+			break
+		}
+
+		// クエリを処理して結果を表示
+		result := getParsedResult(query, jp.jsonData)
+		fmt.Println(result)
+	}
 }
 
 // uniqueKeys はキーリストから重複を削除します
