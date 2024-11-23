@@ -5,14 +5,16 @@ on:
       method:
         description: |
           Which number to increment in the semantic versioning.
-          Set 'major', 'minor' or 'patch'.
         required: true
         type: choice
         options:
           - major
           - minor
           - patch
-        default: patch
+        default: minor
+
+permissions:
+  contents: write
 
 jobs:
   release:
@@ -25,7 +27,6 @@ jobs:
       - name: Bump-up Semantic Version
         uses: kyoh86/git-vertag-action@v1.1
         with:
-          # method: "major", "minor" or "patch" to update tag with semver
           method: "${{ github.event.inputs.method }}"
 
       - name: Setup Go
