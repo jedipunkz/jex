@@ -57,25 +57,17 @@ func main() {
 	var jsonStr strings.Builder
 
 	if len(os.Args) > 1 {
-		// ファイルから読み込む
 		filePath := os.Args[1]
-		file, err := os.Open(filePath)
-		if err != nil {
-			fmt.Println("Error opening file:", err)
+		jp := &JSONProcessor{
+			filePath: filePath,
+		}
+		if err := jp.readFile(); err != nil {
+			fmt.Println(err)
 			return
 		}
-		defer file.Close()
-
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			jsonStr.WriteString(scanner.Text() + "\n")
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Println("Error reading file:", err)
-			return
-		}
+		jsonStr.Write(jp.jsonData)
 	} else {
-		// 標準入力から読み込む
+		// input from pipe
 		stat, err := os.Stdin.Stat()
 		if err != nil {
 			fmt.Println("Error stating stdin:", err)
@@ -83,7 +75,6 @@ func main() {
 		}
 
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
-			// パイプからの入力
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				jsonStr.WriteString(scanner.Text() + "\n")
@@ -98,13 +89,11 @@ func main() {
 		}
 	}
 
-	// JSONProcessor を作成
 	jp := &JSONProcessor{
 		jsonData: []byte(jsonStr.String()),
 	}
 	jp.extractKeys()
 
-	// インタラクティブにクエリを受け付ける
 	for {
 		query, err := jp.startFuzzyFinder()
 		if err != nil {
@@ -115,13 +104,12 @@ func main() {
 			break
 		}
 
-		// クエリを処理して結果を表示
 		result := getParsedResult(query, jp.jsonData)
 		fmt.Println(result)
 	}
 }
 
-// uniqueKeys はキーリストから重複を削除します
+// uniqueKeys is a function that removes duplicates from a key list
 func uniqueKeys(keys []string) []string {
 	seen := make(map[string]struct{})
 	var result []string
