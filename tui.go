@@ -27,13 +27,11 @@ func (tui *TUIManager) run() {
 	}
 	defer tui.gui.Close()
 
-	// 初期化時に全てのキーを候補として設定
 	tui.filteredKeys = tui.jp.keys
 	tui.selectedIndex = 0
 
 	tui.gui.SetManagerFunc(tui.layout)
 
-	// キーバインド設定
 	tui.setKeybindings()
 
 	if err := tui.gui.MainLoop(); err != nil && err != gocui.ErrQuit {
@@ -44,6 +42,7 @@ func (tui *TUIManager) run() {
 func (tui *TUIManager) layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 
+	// query view
 	vQuery, err := g.SetView("query", 0, 0, maxX-1, 3)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -51,6 +50,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	vQuery.Clear()
 	fmt.Fprintf(vQuery, "Search Query: %s", tui.searchQuery)
 
+	// candidates view
 	vCandidates, err := g.SetView("candidates", 0, 4, maxX-1, 15)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -66,7 +66,6 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 
 	// adjust scroll position
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		// 文字列やその他の型
 		_, oy := vCandidates.Origin()
 		_, sy := vCandidates.Size()
 		if tui.selectedIndex >= oy+sy {
@@ -168,7 +167,7 @@ func (tui *TUIManager) setKeybindings() {
 	}
 
 	// control characters support
-	specialChars := []rune{'[', ']', '.', '_'}
+	specialChars := []rune{'[', ']', '.', '_', '#'}
 	for _, char := range specialChars {
 		char := char
 		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -206,8 +205,8 @@ func displayParsedResult(v *gocui.View, query string, jsonData []byte) {
 }
 
 func getParsedResult(query string, jsonData []byte) string {
+	// e.g. "foo[].bar" -> display all "bar" fields in "foo" array
 	if strings.Contains(query, "[]") {
-		// e.g. "foo[].bar" -> display all "bar" fields in "foo" array
 		baseQuery := strings.Split(query, "[]")[0]
 		field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
 		arrayResult := gjson.GetBytes(jsonData, baseQuery)
