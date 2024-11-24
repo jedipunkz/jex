@@ -205,60 +205,97 @@ func displayParsedResult(v *gocui.View, query string, jsonData []byte) {
 }
 
 func getParsedResult(query string, jsonData []byte) string {
-	// e.g. "foo[].bar" -> display all "bar" fields in "foo" array
 	if strings.Contains(query, "[]") {
-		baseQuery := strings.Split(query, "[]")[0]
-		field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
-		arrayResult := gjson.GetBytes(jsonData, baseQuery)
-		if arrayResult.IsArray() {
-			var values []string
-			arrayResult.ForEach(func(_, val gjson.Result) bool {
-				values = append(values, val.Get(field).String())
-				return true
-			})
-			return strings.Join(values, "\n")
-		}
+		return handleArrayQuery(query, jsonData)
 	}
 
-	// e.g. "foo[0].id" -> display the "id" field of the first element in "foo" array
 	if strings.Contains(query, "[") && strings.Contains(query, "]") {
-		baseQuery := query
-		field := ""
-		if dotIndex := strings.Index(query, "."); dotIndex != -1 {
-			baseQuery = query[:dotIndex]
-			field = query[dotIndex+1:]
-		}
-		// separate the array index of baseQuery with a dot
-		baseQuery = strings.Replace(baseQuery, "[", ".", -1)
-		baseQuery = strings.Replace(baseQuery, "]", "", -1)
-		arrayResult := gjson.GetBytes(jsonData, baseQuery)
-		if arrayResult.Exists() {
-			if field != "" {
-				// nested array element processing
-				if strings.Contains(field, "[") && strings.Contains(field, "]") {
-					fieldBase := field
-					fieldField := ""
-					if dotIndex := strings.Index(field, "."); dotIndex != -1 {
-						fieldBase = field[:dotIndex]
-						fieldField = field[dotIndex+1:]
-					}
-					fieldBase = strings.Replace(fieldBase, "[", ".", -1)
-					fieldBase = strings.Replace(fieldBase, "]", "", -1)
-					nestedResult := arrayResult.Get(fieldBase)
-					if nestedResult.Exists() {
-						if fieldField != "" {
-							return nestedResult.Get(fieldField).String()
-						}
-						return nestedResult.String()
-					}
-				}
-				return arrayResult.Get(field).String()
-			}
-			return arrayResult.String()
-		}
+		return handleIndexedQuery(query, jsonData)
 	}
 
-	// ordinary query processing
+	return handleOrdinaryQuery(query, jsonData)
+}
+
+func handleArrayQuery(query string, jsonData []byte) string {
+	baseQuery := strings.Split(query, "[]")[0]
+	field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
+	arrayResult := gjson.GetBytes(jsonData, baseQuery)
+	if arrayResult.IsArray() {
+		var values []string
+		arrayResult.ForEach(func(_, val gjson.Result) bool {
+			if strings.Contains(field, "[") && strings.Contains(field, "]") {
+				values = append(values, handleNestedArray(val, field)...)
+			} else {
+				values = append(values, val.Get(field).String())
+			}
+			return true
+		})
+		return strings.Join(values, "\n")
+	}
+	return "Query failed. No matching data found."
+}
+
+func handleNestedArray(val gjson.Result, field string) []string {
+	var values []string
+	nestedBase := strings.Split(field, "[")[0]
+	nestedIndex := strings.Split(strings.Split(field, "[")[1], "]")[0]
+	nestedField := ""
+	if strings.Contains(field, "]") {
+		nestedField = strings.TrimPrefix(strings.Split(field, "]")[1], ".")
+	}
+	nestedArray := val.Get(nestedBase)
+	if nestedArray.IsArray() {
+		nestedArray.ForEach(func(index, nestedVal gjson.Result) bool {
+			if index.String() == nestedIndex {
+				if nestedField != "" && strings.Contains(nestedField, "[") && strings.Contains(nestedField, "]") {
+					values = append(values, handleNestedArray(nestedVal, nestedField)...)
+				} else if nestedField != "" {
+					values = append(values, nestedVal.Get(nestedField).String())
+				} else {
+					values = append(values, nestedVal.String())
+				}
+			}
+			return true
+		})
+	}
+	return values
+}
+
+func handleIndexedQuery(query string, jsonData []byte) string {
+	baseQuery, field := splitQuery(query)
+	baseQuery = strings.Replace(baseQuery, "[", ".", -1)
+	baseQuery = strings.Replace(baseQuery, "]", "", -1)
+	arrayResult := gjson.GetBytes(jsonData, baseQuery)
+	if arrayResult.Exists() {
+		if field != "" {
+			if strings.Contains(field, "[") && strings.Contains(field, "]") {
+				return strings.Join(handleNestedIndexedQuery(arrayResult, field), "\n")
+			}
+			return arrayResult.Get(field).String()
+		}
+		return arrayResult.String()
+	}
+	return "Query failed. No matching data found."
+}
+
+func handleNestedIndexedQuery(arrayResult gjson.Result, field string) []string {
+	fieldBase, fieldField := splitQuery(field)
+	fieldBase = strings.Replace(fieldBase, "[", ".", -1)
+	fieldBase = strings.Replace(fieldBase, "]", "", -1)
+	nestedResult := arrayResult.Get(fieldBase)
+	if nestedResult.Exists() {
+		if fieldField != "" {
+			if strings.Contains(fieldField, "[") && strings.Contains(fieldField, "]") {
+				return handleNestedArray(nestedResult, fieldField)
+			}
+			return []string{nestedResult.Get(fieldField).String()}
+		}
+		return []string{nestedResult.String()}
+	}
+	return []string{"Query failed. No matching data found."}
+}
+
+func handleOrdinaryQuery(query string, jsonData []byte) string {
 	result := gjson.GetBytes(jsonData, query)
 	if result.Exists() {
 		if result.IsObject() || result.IsArray() {
@@ -270,6 +307,12 @@ func getParsedResult(query string, jsonData []byte) string {
 		}
 		return result.String()
 	}
-
 	return "Query failed. No matching data found."
+}
+
+func splitQuery(query string) (string, string) {
+	if dotIndex := strings.Index(query, "."); dotIndex != -1 {
+		return query[:dotIndex], query[dotIndex+1:]
+	}
+	return query, ""
 }
