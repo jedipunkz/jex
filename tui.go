@@ -220,6 +220,44 @@ func getParsedResult(query string, jsonData []byte) string {
 		}
 	}
 
+	// e.g. "foo[0].id" -> display the "id" field of the first element in "foo" array
+	if strings.Contains(query, "[") && strings.Contains(query, "]") {
+		baseQuery := query
+		field := ""
+		if dotIndex := strings.Index(query, "."); dotIndex != -1 {
+			baseQuery = query[:dotIndex]
+			field = query[dotIndex+1:]
+		}
+		// separate the array index of baseQuery with a dot
+		baseQuery = strings.Replace(baseQuery, "[", ".", -1)
+		baseQuery = strings.Replace(baseQuery, "]", "", -1)
+		arrayResult := gjson.GetBytes(jsonData, baseQuery)
+		if arrayResult.Exists() {
+			if field != "" {
+				// nested array element processing
+				if strings.Contains(field, "[") && strings.Contains(field, "]") {
+					fieldBase := field
+					fieldField := ""
+					if dotIndex := strings.Index(field, "."); dotIndex != -1 {
+						fieldBase = field[:dotIndex]
+						fieldField = field[dotIndex+1:]
+					}
+					fieldBase = strings.Replace(fieldBase, "[", ".", -1)
+					fieldBase = strings.Replace(fieldBase, "]", "", -1)
+					nestedResult := arrayResult.Get(fieldBase)
+					if nestedResult.Exists() {
+						if fieldField != "" {
+							return nestedResult.Get(fieldField).String()
+						}
+						return nestedResult.String()
+					}
+				}
+				return arrayResult.Get(field).String()
+			}
+			return arrayResult.String()
+		}
+	}
+
 	// ordinary query processing
 	result := gjson.GetBytes(jsonData, query)
 	if result.Exists() {

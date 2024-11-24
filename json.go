@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -13,6 +14,7 @@ type JSONProcessor struct {
 
 // JSONProcessor extract keys from JSON data
 func (jp *JSONProcessor) extractKeys() {
+	seenKeys := make(map[string]struct{})
 	var walk func(prefix string, value gjson.Result)
 	walk = func(prefix string, value gjson.Result) {
 		if value.IsObject() {
@@ -21,15 +23,26 @@ func (jp *JSONProcessor) extractKeys() {
 				if prefix != "" {
 					fullKey = prefix + "." + fullKey
 				}
-				jp.keys = append(jp.keys, fullKey)
+				if _, exists := seenKeys[fullKey]; !exists {
+					seenKeys[fullKey] = struct{}{}
+					jp.keys = append(jp.keys, fullKey)
+				}
 				walk(fullKey, val)
 				return true
 			})
 		} else if value.IsArray() {
-			arrayKey := prefix + ".#"
-			jp.keys = append(jp.keys, arrayKey)
-			value.ForEach(func(_, val gjson.Result) bool {
-				walk(prefix+"[]", val)
+			arrayKey := fmt.Sprintf("%s.#", prefix)
+			if _, exists := seenKeys[arrayKey]; !exists {
+				seenKeys[arrayKey] = struct{}{}
+				jp.keys = append(jp.keys, arrayKey)
+			}
+			value.ForEach(func(index, val gjson.Result) bool {
+				elementKey := fmt.Sprintf("%s[%d]", prefix, index.Int())
+				if _, exists := seenKeys[elementKey]; !exists {
+					seenKeys[elementKey] = struct{}{}
+					jp.keys = append(jp.keys, elementKey)
+				}
+				walk(elementKey, val)
 				return true
 			})
 		}
