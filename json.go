@@ -31,13 +31,18 @@ func (jp *JSONProcessor) extractKeys() {
 				return true
 			})
 		} else if value.IsArray() {
+			arrayKey := fmt.Sprintf("%s.#", prefix)
+			if _, exists := seenKeys[arrayKey]; !exists {
+				seenKeys[arrayKey] = struct{}{}
+				jp.keys = append(jp.keys, arrayKey)
+			}
 			value.ForEach(func(index, val gjson.Result) bool {
-				arrayKey := fmt.Sprintf("%s[%d]", prefix, index.Int())
-				if _, exists := seenKeys[arrayKey]; !exists {
-					seenKeys[arrayKey] = struct{}{}
-					jp.keys = append(jp.keys, arrayKey)
+				elementKey := fmt.Sprintf("%s[%d]", prefix, index.Int())
+				if _, exists := seenKeys[elementKey]; !exists {
+					seenKeys[elementKey] = struct{}{}
+					jp.keys = append(jp.keys, elementKey)
 				}
-				walk(arrayKey, val)
+				walk(elementKey, val)
 				return true
 			})
 		}
