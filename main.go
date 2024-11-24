@@ -26,7 +26,6 @@ type TUIManager struct {
 }
 
 func main() {
-	// JSON データの読み込み
 	var jsonStr strings.Builder
 
 	if len(os.Args) > 1 {
@@ -63,7 +62,7 @@ func main() {
 	tui.run()
 }
 
-// JSON のキー候補を抽出する
+// JSONProcessor extract keys from JSON data
 func (jp *JSONProcessor) extractKeys() {
 	var walk func(prefix string, value gjson.Result)
 	walk = func(prefix string, value gjson.Result) {
@@ -91,7 +90,7 @@ func (jp *JSONProcessor) extractKeys() {
 	jp.keys = filterInvalidKeys(jp.keys)
 }
 
-// 不正なキーを除外する（例: "contributors[]"）
+// remove invalid keys (e.g. "foo[]")
 func filterInvalidKeys(keys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
@@ -102,6 +101,7 @@ func filterInvalidKeys(keys []string) []string {
 	return validKeys
 }
 
+// run TUI
 func (tui *TUIManager) run() {
 	var err error
 	tui.gui, err = gocui.NewGui(gocui.OutputNormal)
@@ -123,7 +123,6 @@ func (tui *TUIManager) run() {
 func (tui *TUIManager) layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 
-	// クエリ入力ビュー
 	vQuery, err := g.SetView("query", 0, 0, maxX-1, 3)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -131,7 +130,6 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	vQuery.Clear()
 	fmt.Fprintf(vQuery, "Search Query: %s", tui.searchQuery)
 
-	// 候補表示ビュー
 	vCandidates, err := g.SetView("candidates", 0, 4, maxX-1, 15)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -145,7 +143,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 		}
 	}
 
-	// スクロール位置を調整
+	// adjust scroll position
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
 		_, oy := vCandidates.Origin()
 		_, sy := vCandidates.Size()
@@ -156,7 +154,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 		}
 	}
 
-	// JSON 表示ビュー
+	// json view
 	vJSON, err := g.SetView("json", 0, 16, maxX-1, maxY-1)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -175,7 +173,7 @@ func (tui *TUIManager) setKeybindings() {
 		return gocui.ErrQuit
 	})
 
-	// 候補選択を Ctrl+N / Ctrl+P で操作
+	// ctrl+n, ctrl-p control the selection of candidates
 	tui.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.filteredKeys) > 0 {
 			tui.selectedIndex = (tui.selectedIndex + 1) % len(tui.filteredKeys)
@@ -191,7 +189,7 @@ func (tui *TUIManager) setKeybindings() {
 		return nil
 	})
 
-	// クエリ文字列の文字削除
+	// ctrl+h backspace
 	tui.gui.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.searchQuery) > 0 {
 			tui.searchQuery = tui.searchQuery[:len(tui.searchQuery)-1]
@@ -201,7 +199,7 @@ func (tui *TUIManager) setKeybindings() {
 		return nil
 	})
 
-	// 候補を選択してクエリに反映 (Enter)
+	// enter key to select the candidate
 	tui.gui.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.filteredKeys) > 0 {
 			tui.searchQuery = tui.filteredKeys[tui.selectedIndex]
@@ -210,7 +208,7 @@ func (tui *TUIManager) setKeybindings() {
 		return nil
 	})
 
-	// 文字入力でクエリを編集
+	// input string to edit the query
 	for char := rune('a'); char <= rune('z'); char++ {
 		char := char
 		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -230,7 +228,7 @@ func (tui *TUIManager) setKeybindings() {
 		})
 	}
 
-	// 特殊文字の入力
+	// control characters support
 	specialChars := []rune{'[', ']', '.', '_'}
 	for _, char := range specialChars {
 		char := char
@@ -243,7 +241,7 @@ func (tui *TUIManager) setKeybindings() {
 	}
 }
 
-// クエリ文字列に基づいて候補を更新
+// update candidates based on the query string
 func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int) []string {
 	var filteredKeys []string
 	for _, key := range keys {
@@ -268,7 +266,7 @@ func displayParsedResult(v *gocui.View, query string, jsonData []byte) {
 
 func getParsedResult(query string, jsonData []byte) string {
 	if strings.Contains(query, "[]") {
-		// 配列フィールドの場合は全要素を収集
+		// e.g. "foo[].bar" -> display all "bar" fields in "foo" array
 		baseQuery := strings.Split(query, "[]")[0]
 		field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
 		arrayResult := gjson.GetBytes(jsonData, baseQuery)
@@ -282,7 +280,7 @@ func getParsedResult(query string, jsonData []byte) string {
 		}
 	}
 
-	// 通常のクエリ処理
+	// ordinary query processing
 	result := gjson.GetBytes(jsonData, query)
 	if result.Exists() {
 		if result.IsObject() || result.IsArray() {
@@ -292,7 +290,6 @@ func getParsedResult(query string, jsonData []byte) string {
 			}
 			return result.Raw
 		}
-		// 文字列やその他の型
 		return result.String()
 	}
 
