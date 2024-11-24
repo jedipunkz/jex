@@ -26,6 +26,8 @@ func (jp *JSONProcessor) extractKeys() {
 				return true
 			})
 		} else if value.IsArray() {
+			arrayKey := prefix + ".#"
+			jp.keys = append(jp.keys, arrayKey)
 			value.ForEach(func(_, val gjson.Result) bool {
 				walk(prefix+"[]", val)
 				return true
@@ -35,7 +37,7 @@ func (jp *JSONProcessor) extractKeys() {
 
 	walk("", gjson.ParseBytes(jp.jsonData))
 
-	// 不要な候補を削除
+	// remove invalid keys
 	jp.keys = filterInvalidKeys(jp.keys)
 }
 
@@ -43,7 +45,7 @@ func (jp *JSONProcessor) extractKeys() {
 func filterInvalidKeys(keys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
-		if !strings.HasSuffix(key, "[]") { // "[]" で終わるキーは除外
+		if !strings.HasSuffix(key, "[]") { // remove keys at last '[]'
 			validKeys = append(validKeys, key)
 		}
 	}
