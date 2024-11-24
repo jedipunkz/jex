@@ -229,11 +229,29 @@ func getParsedResult(query string, jsonData []byte) string {
 			field = query[dotIndex+1:]
 		}
 		// 修正: baseQuery の配列インデックスをドットで区切る
-		baseQuery = strings.Replace(baseQuery, "[", ".", 1)
-		baseQuery = strings.Replace(baseQuery, "]", "", 1)
+		baseQuery = strings.Replace(baseQuery, "[", ".", -1)
+		baseQuery = strings.Replace(baseQuery, "]", "", -1)
 		arrayResult := gjson.GetBytes(jsonData, baseQuery)
 		if arrayResult.Exists() {
 			if field != "" {
+				// ネストされた配列要素を処理
+				if strings.Contains(field, "[") && strings.Contains(field, "]") {
+					fieldBase := field
+					fieldField := ""
+					if dotIndex := strings.Index(field, "."); dotIndex != -1 {
+						fieldBase = field[:dotIndex]
+						fieldField = field[dotIndex+1:]
+					}
+					fieldBase = strings.Replace(fieldBase, "[", ".", -1)
+					fieldBase = strings.Replace(fieldBase, "]", "", -1)
+					nestedResult := arrayResult.Get(fieldBase)
+					if nestedResult.Exists() {
+						if fieldField != "" {
+							return nestedResult.Get(fieldField).String()
+						}
+						return nestedResult.String()
+					}
+				}
 				return arrayResult.Get(field).String()
 			}
 			return arrayResult.String()
