@@ -149,9 +149,13 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 		_, oy := vCandidates.Origin()
 		_, sy := vCandidates.Size()
 		if tui.selectedIndex >= oy+sy {
-			vCandidates.SetOrigin(0, tui.selectedIndex-sy+1)
+			if err := vCandidates.SetOrigin(0, tui.selectedIndex-sy+1); err != nil {
+				return err
+			}
 		} else if tui.selectedIndex < oy {
-			vCandidates.SetOrigin(0, tui.selectedIndex)
+			if err := vCandidates.SetOrigin(0, tui.selectedIndex); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -170,75 +174,90 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 
 func (tui *TUIManager) setKeybindings() {
 	// Quit
-	tui.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return gocui.ErrQuit
-	})
-
-	// ctrl+n, ctrl-p control the selection of candidates
-	tui.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	}); err != nil {
+		panic(err)
+	}
+	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.filteredKeys) > 0 {
 			tui.selectedIndex = (tui.selectedIndex + 1) % len(tui.filteredKeys)
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
-	})
-	tui.gui.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.filteredKeys) > 0 {
 			tui.selectedIndex = (tui.selectedIndex - 1 + len(tui.filteredKeys)) % len(tui.filteredKeys)
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	// ctrl+h backspace
-	tui.gui.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.searchQuery) > 0 {
 			tui.searchQuery = tui.searchQuery[:len(tui.searchQuery)-1]
 		}
 		tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	// enter key to select the candidate
-	tui.gui.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := tui.gui.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(tui.filteredKeys) > 0 {
 			tui.searchQuery = tui.filteredKeys[tui.selectedIndex]
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	// input string to edit the query
 	for char := rune('a'); char <= rune('z'); char++ {
 		char := char
-		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 			tui.searchQuery += string(char)
 			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
-		})
+		}); err != nil {
+			panic(err)
+		}
 	}
 	for char := rune('0'); char <= rune('9'); char++ {
 		char := char
-		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 			tui.searchQuery += string(char)
 			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
-		})
+		}); err != nil {
+			panic(err)
+		}
 	}
 
 	// control characters support
 	specialChars := []rune{'[', ']', '.', '_'}
 	for _, char := range specialChars {
 		char := char
-		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 			tui.searchQuery += string(char)
 			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
-		})
+		}); err != nil {
+			panic(err)
+		}
 	}
 }
 
