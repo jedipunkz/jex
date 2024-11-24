@@ -17,6 +17,14 @@ type JSONProcessor struct {
 	keys     []string
 }
 
+type TUIManager struct {
+	gui           *gocui.Gui
+	searchQuery   string
+	selectedIndex int
+	filteredKeys  []string
+	jp            *JSONProcessor
+}
+
 func main() {
 	// JSON データの読み込み
 	var jsonStr strings.Builder
@@ -48,7 +56,11 @@ func main() {
 
 	jp.extractKeys()
 
-	runTUI(jp)
+	tui := &TUIManager{
+		jp: jp,
+	}
+
+	tui.run()
 }
 
 // JSON のキー候補を抽出する
@@ -90,110 +102,109 @@ func filterInvalidKeys(keys []string) []string {
 	return validKeys
 }
 
-func runTUI(jp *JSONProcessor) {
-	var searchQuery string
-	var selectedIndex int
-	var filteredKeys []string
-
-	g, err := gocui.NewGui(gocui.OutputNormal)
+func (tui *TUIManager) run() {
+	var err error
+	tui.gui, err = gocui.NewGui(gocui.OutputNormal)
 	if err != nil {
 		panic(err)
 	}
-	defer g.Close()
+	defer tui.gui.Close()
 
-	g.SetManagerFunc(func(g *gocui.Gui) error {
-		maxX, maxY := g.Size()
-
-		// クエリ入力ビュー
-		vQuery, err := g.SetView("query", 0, 0, maxX-1, 3)
-		if err != nil && err != gocui.ErrUnknownView {
-			return err
-		}
-		vQuery.Clear()
-		fmt.Fprintf(vQuery, "Search Query: %s", searchQuery)
-
-		// 候補表示ビュー
-		vCandidates, err := g.SetView("candidates", 0, 4, maxX-1, 15)
-		if err != nil && err != gocui.ErrUnknownView {
-			return err
-		}
-		vCandidates.Clear()
-		for i, key := range filteredKeys {
-			if i == selectedIndex {
-				fmt.Fprintf(vCandidates, "> %s\n", key)
-			} else {
-				fmt.Fprintf(vCandidates, "  %s\n", key)
-			}
-		}
-
-		// スクロール位置を調整
-		if selectedIndex >= 0 && selectedIndex < len(filteredKeys) {
-			_, oy := vCandidates.Origin()
-			_, sy := vCandidates.Size()
-			if selectedIndex >= oy+sy {
-				vCandidates.SetOrigin(0, selectedIndex-sy+1)
-			} else if selectedIndex < oy {
-				vCandidates.SetOrigin(0, selectedIndex)
-			}
-		}
-
-		// JSON 表示ビュー
-		vJSON, err := g.SetView("json", 0, 16, maxX-1, maxY-1)
-		if err != nil && err != gocui.ErrUnknownView {
-			return err
-		}
-		vJSON.Clear()
-		if selectedIndex >= 0 && selectedIndex < len(filteredKeys) {
-			displayParsedResult(vJSON, filteredKeys[selectedIndex], jp.jsonData)
-		}
-
-		return nil
-	})
+	tui.gui.SetManagerFunc(tui.layout)
 
 	// キーバインド設定
-	setKeybindings(g, jp, &searchQuery, &selectedIndex, &filteredKeys)
+	tui.setKeybindings()
 
-	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
+	if err := tui.gui.MainLoop(); err != nil && err != gocui.ErrQuit {
 		fmt.Println("Error:", err)
 	}
 }
 
-func setKeybindings(g *gocui.Gui, jp *JSONProcessor, searchQuery *string, selectedIndex *int, filteredKeys *[]string) {
+func (tui *TUIManager) layout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+
+	// クエリ入力ビュー
+	vQuery, err := g.SetView("query", 0, 0, maxX-1, 3)
+	if err != nil && err != gocui.ErrUnknownView {
+		return err
+	}
+	vQuery.Clear()
+	fmt.Fprintf(vQuery, "Search Query: %s", tui.searchQuery)
+
+	// 候補表示ビュー
+	vCandidates, err := g.SetView("candidates", 0, 4, maxX-1, 15)
+	if err != nil && err != gocui.ErrUnknownView {
+		return err
+	}
+	vCandidates.Clear()
+	for i, key := range tui.filteredKeys {
+		if i == tui.selectedIndex {
+			fmt.Fprintf(vCandidates, "> %s\n", key)
+		} else {
+			fmt.Fprintf(vCandidates, "  %s\n", key)
+		}
+	}
+
+	// スクロール位置を調整
+	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
+		_, oy := vCandidates.Origin()
+		_, sy := vCandidates.Size()
+		if tui.selectedIndex >= oy+sy {
+			vCandidates.SetOrigin(0, tui.selectedIndex-sy+1)
+		} else if tui.selectedIndex < oy {
+			vCandidates.SetOrigin(0, tui.selectedIndex)
+		}
+	}
+
+	// JSON 表示ビュー
+	vJSON, err := g.SetView("json", 0, 16, maxX-1, maxY-1)
+	if err != nil && err != gocui.ErrUnknownView {
+		return err
+	}
+	vJSON.Clear()
+	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
+		displayParsedResult(vJSON, tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+	}
+
+	return nil
+}
+
+func (tui *TUIManager) setKeybindings() {
 	// Quit
-	g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	tui.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return gocui.ErrQuit
 	})
 
 	// 候補選択を Ctrl+N / Ctrl+P で操作
-	g.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(*filteredKeys) > 0 {
-			*selectedIndex = (*selectedIndex + 1) % len(*filteredKeys)
+	tui.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if len(tui.filteredKeys) > 0 {
+			tui.selectedIndex = (tui.selectedIndex + 1) % len(tui.filteredKeys)
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
 	})
-	g.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(*filteredKeys) > 0 {
-			*selectedIndex = (*selectedIndex - 1 + len(*filteredKeys)) % len(*filteredKeys)
+	tui.gui.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if len(tui.filteredKeys) > 0 {
+			tui.selectedIndex = (tui.selectedIndex - 1 + len(tui.filteredKeys)) % len(tui.filteredKeys)
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
 	})
 
 	// クエリ文字列の文字削除
-	g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(*searchQuery) > 0 {
-			*searchQuery = (*searchQuery)[:len(*searchQuery)-1]
+	tui.gui.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if len(tui.searchQuery) > 0 {
+			tui.searchQuery = tui.searchQuery[:len(tui.searchQuery)-1]
 		}
-		*filteredKeys = updateSelectedIndex(searchQuery, jp.keys, selectedIndex)
+		tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
 	})
 
 	// 候補を選択してクエリに反映 (Enter)
-	g.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(*filteredKeys) > 0 {
-			*searchQuery = (*filteredKeys)[*selectedIndex]
+	tui.gui.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if len(tui.filteredKeys) > 0 {
+			tui.searchQuery = tui.filteredKeys[tui.selectedIndex]
 		}
 		g.Update(func(g *gocui.Gui) error { return nil })
 		return nil
@@ -202,18 +213,18 @@ func setKeybindings(g *gocui.Gui, jp *JSONProcessor, searchQuery *string, select
 	// 文字入力でクエリを編集
 	for char := rune('a'); char <= rune('z'); char++ {
 		char := char
-		g.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			*searchQuery += string(char)
-			*filteredKeys = updateSelectedIndex(searchQuery, jp.keys, selectedIndex)
+		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			tui.searchQuery += string(char)
+			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
 		})
 	}
 	for char := rune('0'); char <= rune('9'); char++ {
 		char := char
-		g.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			*searchQuery += string(char)
-			*filteredKeys = updateSelectedIndex(searchQuery, jp.keys, selectedIndex)
+		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			tui.searchQuery += string(char)
+			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
 		})
@@ -223,9 +234,9 @@ func setKeybindings(g *gocui.Gui, jp *JSONProcessor, searchQuery *string, select
 	specialChars := []rune{'[', ']', '.', '_'}
 	for _, char := range specialChars {
 		char := char
-		g.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			*searchQuery += string(char)
-			*filteredKeys = updateSelectedIndex(searchQuery, jp.keys, selectedIndex)
+		tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			tui.searchQuery += string(char)
+			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
 			g.Update(func(g *gocui.Gui) error { return nil })
 			return nil
 		})
