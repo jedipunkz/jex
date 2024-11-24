@@ -67,9 +67,7 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 		value.ForEach(func(_, val gjson.Result) bool {
 			val.ForEach(func(key, val gjson.Result) bool {
 				fullKey := fmt.Sprintf("%s[].%s", prefix, key.String())
-				if strings.HasSuffix(fullKey, ".") {
-					fullKey = fullKey[:len(fullKey)-1]
-				}
+				fullKey = strings.TrimSuffix(fullKey, ".")
 				if _, exists := seenKeys[fullKey]; !exists {
 					seenKeys[fullKey] = struct{}{}
 					jp.keys = append(jp.keys, fullKey)
