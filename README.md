@@ -2,6 +2,8 @@
 
 Jex is a simple tool for navigating and querying JSON data. Designed to enhance productivity, Jex provides an intuitive interface with fuzzy searching and dynamic previews to help you efficiently explore complex JSON structures.
 
+<img src="https://raw.githubusercontent.com/jedipunkz/jex/main/static/pix/jex.png">
+
 
 ## Installation
 
