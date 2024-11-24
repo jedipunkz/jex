@@ -27,6 +27,10 @@ func (tui *TUIManager) run() {
 	}
 	defer tui.gui.Close()
 
+	// 初期化時に全てのキーを候補として設定
+	tui.filteredKeys = tui.jp.keys
+	tui.selectedIndex = 0
+
 	tui.gui.SetManagerFunc(tui.layout)
 
 	// キーバインド設定
