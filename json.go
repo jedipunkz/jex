@@ -13,6 +13,8 @@ type JSONProcessor struct {
 }
 
 // JSONProcessor extract keys from JSON data
+// seenKeys is used to prevent duplicate keys
+// walk is a recursive function to walk through JSON data
 func (jp *JSONProcessor) extractKeys() {
 	seenKeys := make(map[string]struct{})
 	var walk func(prefix string, value gjson.Result)
