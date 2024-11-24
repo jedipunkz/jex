@@ -220,6 +220,26 @@ func getParsedResult(query string, jsonData []byte) string {
 		}
 	}
 
+	// e.g. "foo[0].id" -> display the "id" field of the first element in "foo" array
+	if strings.Contains(query, "[") && strings.Contains(query, "]") {
+		baseQuery := query
+		field := ""
+		if dotIndex := strings.Index(query, "."); dotIndex != -1 {
+			baseQuery = query[:dotIndex]
+			field = query[dotIndex+1:]
+		}
+		// 修正: baseQuery の配列インデックスをドットで区切る
+		baseQuery = strings.Replace(baseQuery, "[", ".", 1)
+		baseQuery = strings.Replace(baseQuery, "]", "", 1)
+		arrayResult := gjson.GetBytes(jsonData, baseQuery)
+		if arrayResult.Exists() {
+			if field != "" {
+				return arrayResult.Get(field).String()
+			}
+			return arrayResult.String()
+		}
+	}
+
 	// ordinary query processing
 	result := gjson.GetBytes(jsonData, query)
 	if result.Exists() {
