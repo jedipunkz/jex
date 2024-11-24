@@ -137,7 +137,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	vCandidates.Clear()
 	for i, key := range tui.filteredKeys {
 		if i == tui.selectedIndex {
-			fmt.Fprintf(vCandidates, "> %s\n", key)
+			fmt.Fprintf(vCandidates, "\033[33m> %s\033[0m\n", key) // Yellow color
 		} else {
 			fmt.Fprintf(vCandidates, "  %s\n", key)
 		}
@@ -145,6 +145,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 
 	// adjust scroll position
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
+		// 文字列やその他の型
 		_, oy := vCandidates.Origin()
 		_, sy := vCandidates.Size()
 		if tui.selectedIndex >= oy+sy {
