@@ -21,6 +21,13 @@ Run Jex with a JSON file as input:
 jex <JSON_FILE>
 ```
 
+or jex can recieve input from a pipe.
+
+```bash
+cat <JSON_FILE> | jex
+```
+
+
 ## Example
 
 Given a JSON file data.json:
