@@ -113,7 +113,9 @@ func runTUI(jp *JSONProcessor) {
 			return err
 		}
 		vJSON.Clear()
-		displayParsedResult(vJSON, searchQuery, jp.jsonData)
+		if selectedIndex >= 0 && selectedIndex < len(jp.keys) {
+			displayParsedResult(vJSON, jp.keys[selectedIndex], jp.jsonData)
+		}
 
 		return nil
 	})
