@@ -45,6 +45,20 @@ func (jp *JSONProcessor) extractKeys() {
 				walk(elementKey, val)
 				return true
 			})
+			// Add keys for array elements like foo[].name
+			if prefix != "" {
+				value.ForEach(func(_, val gjson.Result) bool {
+					val.ForEach(func(key, val gjson.Result) bool {
+						fullKey := fmt.Sprintf("%s[].%s", prefix, key.String())
+						if _, exists := seenKeys[fullKey]; !exists {
+							seenKeys[fullKey] = struct{}{}
+							jp.keys = append(jp.keys, fullKey)
+						}
+						return true
+					})
+					return false // Only need to process the first element to get the keys
+				})
+			}
 		}
 	}
 
