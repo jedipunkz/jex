@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alecthomas/chroma/quick"
 	"github.com/jroimartin/gocui"
 	"github.com/tidwall/gjson"
 )
@@ -95,16 +96,10 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 }
 
 func highlightJSON(jsonData string) string {
-	var highlighted strings.Builder
-	for _, r := range jsonData {
-		switch r {
-		case '{', '}', '[', ']', ':', ',':
-			highlighted.WriteString(fmt.Sprintf("\033[36m%c\033[0m", r)) // Cyan color
-		case '"':
-			highlighted.WriteString(fmt.Sprintf("\033[32m%c\033[0m", r)) // Green color
-		default:
-			highlighted.WriteRune(r)
-		}
+	var highlighted bytes.Buffer
+	err := quick.Highlight(&highlighted, jsonData, "json", "terminal", "monokai")
+	if err != nil {
+		return jsonData
 	}
 	return highlighted.String()
 }
