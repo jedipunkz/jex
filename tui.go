@@ -86,7 +86,7 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	}
 	vJSON.Clear()
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		jsonData := displayParsedResult(tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+		jsonData := getParsedResult(tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
 		highlightedJSON := highlightJSON(jsonData)
 		fmt.Fprintln(vJSON, highlightedJSON)
 	}
@@ -216,9 +216,7 @@ func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int)
 	return filteredKeys
 }
 
-func displayParsedResult(query string, jsonData []byte) string {
-	return getParsedResult(query, jsonData)
-}
+// Removed displayParsedResult function as it was just returning getParsedResult
 
 func getParsedResult(query string, jsonData []byte) string {
 	if strings.Contains(query, "[]") {
