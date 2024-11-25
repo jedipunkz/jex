@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alecthomas/chroma/quick"
 	"github.com/jroimartin/gocui"
 	"github.com/tidwall/gjson"
 )
@@ -86,10 +87,21 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	}
 	vJSON.Clear()
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		displayParsedResult(vJSON, tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+		jsonData := getParsedResult(tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+		highlightedJSON := highlightJSON(jsonData)
+		fmt.Fprintln(vJSON, highlightedJSON)
 	}
 
 	return nil
+}
+
+func highlightJSON(jsonData string) string {
+	var highlighted bytes.Buffer
+	err := quick.Highlight(&highlighted, jsonData, "json", "terminal", "monokai")
+	if err != nil {
+		return jsonData
+	}
+	return highlighted.String()
 }
 
 func (tui *TUIManager) setKeybindings() {
@@ -199,10 +211,7 @@ func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int)
 	return filteredKeys
 }
 
-func displayParsedResult(v *gocui.View, query string, jsonData []byte) {
-	result := getParsedResult(query, jsonData)
-	fmt.Fprintln(v, result)
-}
+// Removed displayParsedResult function as it was just returning getParsedResult
 
 func getParsedResult(query string, jsonData []byte) string {
 	if strings.Contains(query, "[]") {
