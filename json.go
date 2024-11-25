@@ -74,7 +74,7 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 					seenKeys[fullKey] = struct{}{}
 					jp.keys = append(jp.keys, fullKey)
 				}
-				// ネストされた配列要素のキーを追加 (e.g. foo[].bar[0])
+				// add nested array element keys (e.g. foo[].bar[0])
 				if val.IsArray() {
 					val.ForEach(func(index, nestedVal gjson.Result) bool {
 						nestedKey := fmt.Sprintf("%s[%d]", fullKey, index.Int())
@@ -87,7 +87,7 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 				}
 				return true
 			})
-			return false // 最初の要素だけ処理すれば十分
+			return false // only process the first element
 		})
 	}
 }
@@ -96,7 +96,7 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 func filterInvalidKeys(keys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
-		if !strings.HasSuffix(key, "[]") { // 最後が '[]' のキーを削除
+		if !strings.HasSuffix(key, "[]") { // remove array with '[]' suffix
 			validKeys = append(validKeys, key)
 		}
 	}
