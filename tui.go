@@ -86,10 +86,27 @@ func (tui *TUIManager) layout(g *gocui.Gui) error {
 	}
 	vJSON.Clear()
 	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		displayParsedResult(vJSON, tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+		jsonData := displayParsedResult(tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
+		highlightedJSON := highlightJSON(jsonData)
+		fmt.Fprintln(vJSON, highlightedJSON)
 	}
 
 	return nil
+}
+
+func highlightJSON(jsonData string) string {
+	var highlighted strings.Builder
+	for _, r := range jsonData {
+		switch r {
+		case '{', '}', '[', ']', ':', ',':
+			highlighted.WriteString(fmt.Sprintf("\033[36m%c\033[0m", r)) // Cyan color
+		case '"':
+			highlighted.WriteString(fmt.Sprintf("\033[32m%c\033[0m", r)) // Green color
+		default:
+			highlighted.WriteRune(r)
+		}
+	}
+	return highlighted.String()
 }
 
 func (tui *TUIManager) setKeybindings() {
@@ -199,9 +216,8 @@ func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int)
 	return filteredKeys
 }
 
-func displayParsedResult(v *gocui.View, query string, jsonData []byte) {
-	result := getParsedResult(query, jsonData)
-	fmt.Fprintln(v, result)
+func displayParsedResult(query string, jsonData []byte) string {
+	return getParsedResult(query, jsonData)
 }
 
 func getParsedResult(query string, jsonData []byte) string {
