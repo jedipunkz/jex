@@ -197,7 +197,7 @@ func (tui *TUIManager) setKeybindings() {
 func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int) []string {
 	var filteredKeys []string
 	for _, key := range keys {
-		if strings.Contains(key, *searchQuery) {
+		if fuzzyFind(key, *searchQuery) {
 			filteredKeys = append(filteredKeys, key)
 		}
 	}
@@ -209,6 +209,26 @@ func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int)
 	}
 
 	return filteredKeys
+}
+
+// fuzzy match function to check if all characters in searchQuery are in key in order
+func fuzzyFind(key, searchQuery string) bool {
+	keyIndex := 0
+	for _, char := range searchQuery {
+		found := false
+		for keyIndex < len(key) {
+			if key[keyIndex] == byte(char) {
+				found = true
+				keyIndex++
+				break
+			}
+			keyIndex++
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // Removed displayParsedResult function as it was just returning getParsedResult
