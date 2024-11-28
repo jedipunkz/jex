@@ -1,4 +1,4 @@
-# Jex - The Lightweight JSON Explorer
+# Jex - Lightweight Json Explorer
 
 Jex is a simple tool for navigating and querying JSON data. Jex provides an interface with query searching and dynamic previews to help you efficiently explore complex JSON structures.
 
