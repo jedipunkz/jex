@@ -1,6 +1,12 @@
-name: CI
+name: CI-Workflow
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   setup:
@@ -16,7 +22,7 @@ jobs:
         uses: actions/checkout@master
 
       - name: Cache
-        uses: actions/cache@v4
+        uses: actions/cache@main
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
