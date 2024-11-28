@@ -1,5 +1,7 @@
 # Jex - Lightweight Json Explorer
 
+![workflow](https://github.com/jedipunkz/jex/actions/workflows/ci.yml/badge.svg)
+
 Jex is a simple tool for navigating and querying JSON data. Jex provides an interface with query searching and dynamic previews to help you efficiently explore complex JSON structures.
 
 <img src="https://raw.githubusercontent.com/jedipunkz/jex/main/static/pix/jex.gif">
