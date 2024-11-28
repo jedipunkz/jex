@@ -33,7 +33,7 @@ cat <JSON_FILE> | jex
 ```
 
 ## Author
-Jex was created with by jedipunkz.
+Jex was created by jedipunkz.
 
 ## License
 This project is licensed under the MIT License.
