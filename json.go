@@ -242,8 +242,8 @@ func handleNestedArray(val gjson.Result, field string) []string {
 func handleIndexedQuery(query string, jsonData []byte) string {
 	// Convert query from "company.departments[0].teams[0].members[0]"
 	// to gjson format "company.departments.0.teams.0.members.0"
-	gjsonQuery := strings.Replace(query, "[", ".", -1)
-	gjsonQuery = strings.Replace(gjsonQuery, "]", "", -1)
+	gjsonQuery := strings.ReplaceAll(query, "[", ".")
+	gjsonQuery = strings.ReplaceAll(gjsonQuery, "]", "")
 
 	result := gjson.GetBytes(jsonData, gjsonQuery)
 	if result.Exists() {
@@ -274,14 +274,6 @@ func handleOrdinaryQuery(query string, jsonData []byte) string {
 		return result.String()
 	}
 	return "Query failed. No matching data found."
-}
-
-// splitQuery splits a query into base and field parts
-func splitQuery(query string) (string, string) {
-	if dotIndex := strings.Index(query, "."); dotIndex != -1 {
-		return query[:dotIndex], query[dotIndex+1:]
-	}
-	return query, ""
 }
 
 // Utility Functions

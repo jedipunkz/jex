@@ -53,9 +53,8 @@ type Model struct {
 	jp *JSONProcessor
 
 	// Tree state
-	treeItems    []TreeItem
-	selectedIdx  int
-	treeOffset   int
+	treeItems   []TreeItem
+	selectedIdx int
 
 	// Search state
 	searchQuery  string
