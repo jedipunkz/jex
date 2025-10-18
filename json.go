@@ -105,7 +105,6 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 	}
 }
 
-// remove invalid keys (e.g. "foo[]" or "certifications[].name")
 func filterInvalidKeys(keys []string, rootKeys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
@@ -114,13 +113,10 @@ func filterInvalidKeys(keys []string, rootKeys []string) []string {
 			continue
 		}
 
-		// Remove keys containing "[]" pattern (e.g., "certifications[].name")
-		// These patterns often fail in nested contexts
 		if strings.Contains(key, "[]") {
 			continue
 		}
 
-		// If root keys exist (JSON is an object), validate that keys start with a root key
 		if len(rootKeys) > 0 {
 			validRoot := false
 			for _, rootKey := range rootKeys {
