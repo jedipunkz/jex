@@ -37,9 +37,15 @@ func main() {
 
 	jp.extractKeys()
 
-	tui := &TUIManager{
-		jp: jp,
+	// Determine filename for display
+	fileName := "stdin"
+	if len(os.Args) > 1 {
+		fileName = os.Args[1]
 	}
 
-	tui.run()
+	// Use new Bubbletea TUI
+	if err := RunBubbleteaTUI(jp, fileName); err != nil {
+		fmt.Println("Error running TUI:", err)
+		os.Exit(1)
+	}
 }

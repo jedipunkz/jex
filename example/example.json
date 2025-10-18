@@ -1,0 +1,311 @@
+{
+  "company": {
+    "name": "Tech Innovations Inc.",
+    "founded": 2010,
+    "headquarters": {
+      "address": {
+        "street": "123 Tech Street",
+        "city": "San Francisco",
+        "state": "CA",
+        "zipCode": "94102",
+        "country": "USA"
+      },
+      "coordinates": {
+        "latitude": 37.7749,
+        "longitude": -122.4194
+      }
+    },
+    "departments": [
+      {
+        "id": 1,
+        "name": "Engineering",
+        "budget": 5000000,
+        "teams": [
+          {
+            "id": 101,
+            "name": "Frontend",
+            "members": [
+              {
+                "employeeId": "EMP001",
+                "name": "Alice Johnson",
+                "role": "Senior Developer",
+                "skills": ["React", "TypeScript", "CSS"],
+                "yearsOfExperience": 8,
+                "certifications": [
+                  {
+                    "name": "AWS Certified Developer",
+                    "issuedBy": "Amazon",
+                    "year": 2022
+                  }
+                ]
+              },
+              {
+                "employeeId": "EMP002",
+                "name": "Bob Smith",
+                "role": "Tech Lead",
+                "skills": ["Vue.js", "JavaScript", "Node.js"],
+                "yearsOfExperience": 10,
+                "certifications": []
+              }
+            ],
+            "projects": [
+              {
+                "projectId": "PROJ-001",
+                "name": "Dashboard Redesign",
+                "status": "in-progress",
+                "startDate": "2024-01-15",
+                "endDate": null,
+                "milestones": [
+                  {
+                    "name": "Design Phase",
+                    "completed": true,
+                    "completionDate": "2024-02-01"
+                  },
+                  {
+                    "name": "Development Phase",
+                    "completed": false,
+                    "completionDate": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": 102,
+            "name": "Backend",
+            "members": [
+              {
+                "employeeId": "EMP003",
+                "name": "Charlie Davis",
+                "role": "Backend Engineer",
+                "skills": ["Go", "Python", "Kubernetes"],
+                "yearsOfExperience": 6,
+                "certifications": [
+                  {
+                    "name": "Google Cloud Professional",
+                    "issuedBy": "Google",
+                    "year": 2023
+                  },
+                  {
+                    "name": "Kubernetes Administrator",
+                    "issuedBy": "CNCF",
+                    "year": 2023
+                  }
+                ]
+              }
+            ],
+            "projects": []
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Marketing",
+        "budget": 2000000,
+        "teams": [
+          {
+            "id": 201,
+            "name": "Digital Marketing",
+            "members": [
+              {
+                "employeeId": "EMP004",
+                "name": "Diana Martinez",
+                "role": "Marketing Manager",
+                "skills": ["SEO", "Content Marketing", "Analytics"],
+                "yearsOfExperience": 7,
+                "certifications": []
+              }
+            ],
+            "campaigns": [
+              {
+                "campaignId": "CAMP-001",
+                "name": "Product Launch 2024",
+                "budget": 500000,
+                "channels": ["social_media", "email", "paid_search"],
+                "metrics": {
+                  "impressions": 1500000,
+                  "clicks": 75000,
+                  "conversions": 3500,
+                  "roi": 2.8
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "products": [
+      {
+        "productId": "PROD-001",
+        "name": "Cloud Platform",
+        "category": "SaaS",
+        "pricing": {
+          "tiers": [
+            {
+              "name": "Starter",
+              "price": 29,
+              "currency": "USD",
+              "features": ["Basic Support", "5GB Storage", "10 Users"],
+              "limits": {
+                "apiCalls": 10000,
+                "storage": 5,
+                "users": 10
+              }
+            },
+            {
+              "name": "Professional",
+              "price": 99,
+              "currency": "USD",
+              "features": ["Priority Support", "50GB Storage", "Unlimited Users", "Advanced Analytics"],
+              "limits": {
+                "apiCalls": 100000,
+                "storage": 50,
+                "users": null
+              }
+            },
+            {
+              "name": "Enterprise",
+              "price": null,
+              "currency": "USD",
+              "features": ["24/7 Support", "Unlimited Storage", "Unlimited Users", "Custom Integration"],
+              "limits": {
+                "apiCalls": null,
+                "storage": null,
+                "users": null
+              }
+            }
+          ]
+        },
+        "reviews": [
+          {
+            "reviewId": "REV-001",
+            "author": "john_doe",
+            "rating": 4.5,
+            "title": "Great product!",
+            "comment": "Very satisfied with the features and support.",
+            "date": "2024-03-15",
+            "verified": true,
+            "helpful": {
+              "yes": 45,
+              "no": 3
+            }
+          },
+          {
+            "reviewId": "REV-002",
+            "author": "tech_reviewer",
+            "rating": 5.0,
+            "title": "Best in class",
+            "comment": "Outstanding performance and reliability.",
+            "date": "2024-03-20",
+            "verified": true,
+            "helpful": {
+              "yes": 102,
+              "no": 1
+            }
+          }
+        ]
+      }
+    ],
+    "financials": {
+      "revenue": {
+        "2022": {
+          "q1": 2500000,
+          "q2": 2800000,
+          "q3": 3200000,
+          "q4": 3500000,
+          "total": 12000000
+        },
+        "2023": {
+          "q1": 3200000,
+          "q2": 3600000,
+          "q3": 4100000,
+          "q4": 4500000,
+          "total": 15400000
+        },
+        "2024": {
+          "q1": 4200000,
+          "q2": null,
+          "q3": null,
+          "q4": null,
+          "total": null
+        }
+      },
+      "expenses": {
+        "categories": [
+          {
+            "name": "Salaries",
+            "amount": 8000000,
+            "percentage": 52
+          },
+          {
+            "name": "Infrastructure",
+            "amount": 3000000,
+            "percentage": 19
+          },
+          {
+            "name": "Marketing",
+            "amount": 2000000,
+            "percentage": 13
+          },
+          {
+            "name": "Operations",
+            "amount": 1500000,
+            "percentage": 10
+          },
+          {
+            "name": "Other",
+            "amount": 900000,
+            "percentage": 6
+          }
+        ]
+      }
+    },
+    "metadata": {
+      "version": "2.1.0",
+      "lastUpdated": "2024-03-25T10:30:00Z",
+      "dataSource": "internal_api",
+      "isPublic": false,
+      "tags": ["tech", "saas", "cloud", "enterprise"],
+      "config": {
+        "features": {
+          "analytics": {
+            "enabled": true,
+            "provider": "google_analytics",
+            "trackingId": "GA-XXXXXXXX"
+          },
+          "notifications": {
+            "email": {
+              "enabled": true,
+              "smtp": {
+                "host": "smtp.example.com",
+                "port": 587,
+                "secure": true
+              }
+            },
+            "slack": {
+              "enabled": true,
+              "webhookUrl": "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+            },
+            "sms": {
+              "enabled": false,
+              "provider": null
+            }
+          }
+        },
+        "security": {
+          "ssl": {
+            "enabled": true,
+            "version": "TLSv1.3"
+          },
+          "authentication": {
+            "methods": ["oauth2", "saml", "api_key"],
+            "twoFactor": {
+              "enabled": true,
+              "options": ["totp", "sms", "email"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

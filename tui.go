@@ -1,347 +1,463 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/alecthomas/chroma/quick"
-	"github.com/jroimartin/gocui"
-	"github.com/tidwall/gjson"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-type TUIManager struct {
-	gui           *gocui.Gui
-	searchQuery   string
-	selectedIndex int
-	filteredKeys  []string
-	jp            *JSONProcessor
+// Styles
+var (
+	headerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("#7D56F4")).
+			Padding(0, 1).
+			Bold(true)
+
+	treeStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2)
+
+	extractStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2)
+
+	searchStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFA500")).
+			Padding(0, 1)
+
+	selectedItemStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFF00")).
+				Bold(true)
+)
+
+// TreeItem represents an item in the JSON tree
+type TreeItem struct {
+	key     string
+	display string
+	depth   int
 }
 
-// run TUI
-func (tui *TUIManager) run() {
-	var err error
-	tui.gui, err = gocui.NewGui(gocui.OutputNormal)
-	if err != nil {
-		panic(err)
-	}
-	defer tui.gui.Close()
+// Model represents the application state
+type Model struct {
+	// JSON data
+	jsonData []byte
+	fileName string
 
-	tui.filteredKeys = tui.jp.keys
-	tui.selectedIndex = 0
+	// JSON Processor
+	jp *JSONProcessor
 
-	tui.gui.SetManagerFunc(tui.layout)
+	// Tree state
+	treeItems   []TreeItem
+	selectedIdx int
 
-	tui.setKeybindings()
+	// Search state
+	searchQuery  string
+	filteredKeys []string
 
-	if err := tui.gui.MainLoop(); err != nil && err != gocui.ErrQuit {
-		fmt.Println("Error:", err)
-	}
+	// UI state
+	width       int
+	height      int
+	leftWidth   int
+	rightWidth  int
+	ready       bool
+
+	// Viewports
+	treeViewport    viewport.Model
+	extractViewport viewport.Model
 }
 
-func (tui *TUIManager) layout(g *gocui.Gui) error {
-	maxX, maxY := g.Size()
-
-	// query view
-	vQuery, err := g.SetView("query", 0, 0, maxX-1, 3)
-	if err != nil && err != gocui.ErrUnknownView {
-		return err
-	}
-	vQuery.Clear()
-	fmt.Fprintf(vQuery, "Search Query: %s", tui.searchQuery)
-
-	// candidates view
-	vCandidates, err := g.SetView("candidates", 0, 4, maxX-1, 15)
-	if err != nil && err != gocui.ErrUnknownView {
-		return err
-	}
-	vCandidates.Clear()
-	for i, key := range tui.filteredKeys {
-		if i == tui.selectedIndex {
-			fmt.Fprintf(vCandidates, "\033[33m> %s\033[0m\n", key) // Yellow color
-		} else {
-			fmt.Fprintf(vCandidates, "  %s\n", key)
-		}
-	}
-
-	// adjust scroll position
-	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		_, oy := vCandidates.Origin()
-		_, sy := vCandidates.Size()
-		if tui.selectedIndex >= oy+sy {
-			if err := vCandidates.SetOrigin(0, tui.selectedIndex-sy+1); err != nil {
-				return err
-			}
-		} else if tui.selectedIndex < oy {
-			if err := vCandidates.SetOrigin(0, tui.selectedIndex); err != nil {
-				return err
-			}
-		}
-	}
-
-	// json view
-	vJSON, err := g.SetView("json", 0, 16, maxX-1, maxY-1)
-	if err != nil && err != gocui.ErrUnknownView {
-		return err
-	}
-	vJSON.Clear()
-	if tui.selectedIndex >= 0 && tui.selectedIndex < len(tui.filteredKeys) {
-		jsonData := getParsedResult(tui.filteredKeys[tui.selectedIndex], tui.jp.jsonData)
-		highlightedJSON := highlightJSON(jsonData)
-		fmt.Fprintln(vJSON, highlightedJSON)
-	}
-
+// Init initializes the model
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func highlightJSON(jsonData string) string {
-	var highlighted bytes.Buffer
-	err := quick.Highlight(&highlighted, jsonData, "json", "terminal", "monokai")
-	if err != nil {
-		return jsonData
-	}
-	return highlighted.String()
-}
+// Update handles messages and updates the model
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
 
-func (tui *TUIManager) setKeybindings() {
-	// Quit
-	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return gocui.ErrQuit
-	}); err != nil {
-		panic(err)
-	}
-	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(tui.filteredKeys) > 0 {
-			tui.selectedIndex = (tui.selectedIndex + 1) % len(tui.filteredKeys)
-		}
-		g.Update(func(g *gocui.Gui) error { return nil })
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(tui.filteredKeys) > 0 {
-			tui.selectedIndex = (tui.selectedIndex - 1 + len(tui.filteredKeys)) % len(tui.filteredKeys)
-		}
-		g.Update(func(g *gocui.Gui) error { return nil })
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	// ctrl+h backspace
-	if err := tui.gui.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(tui.searchQuery) > 0 {
-			tui.searchQuery = tui.searchQuery[:len(tui.searchQuery)-1]
-		}
-		tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
-		g.Update(func(g *gocui.Gui) error { return nil })
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	// enter key to select the candidate
-	if err := tui.gui.SetKeybinding("", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(tui.filteredKeys) > 0 {
-			tui.searchQuery = tui.filteredKeys[tui.selectedIndex]
-		}
-		g.Update(func(g *gocui.Gui) error { return nil })
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	// input string to edit the query
-	for char := rune('a'); char <= rune('z'); char++ {
-		char := char
-		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			tui.searchQuery += string(char)
-			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
-			g.Update(func(g *gocui.Gui) error { return nil })
-			return nil
-		}); err != nil {
-			panic(err)
-		}
-	}
-	for char := rune('0'); char <= rune('9'); char++ {
-		char := char
-		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			tui.searchQuery += string(char)
-			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
-			g.Update(func(g *gocui.Gui) error { return nil })
-			return nil
-		}); err != nil {
-			panic(err)
-		}
-	}
-
-	// control characters support
-	specialChars := []rune{'[', ']', '.', '_', '#'}
-	for _, char := range specialChars {
-		char := char
-		if err := tui.gui.SetKeybinding("", char, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			tui.searchQuery += string(char)
-			tui.filteredKeys = updateSelectedIndex(&tui.searchQuery, tui.jp.keys, &tui.selectedIndex)
-			g.Update(func(g *gocui.Gui) error { return nil })
-			return nil
-		}); err != nil {
-			panic(err)
-		}
-	}
-}
-
-// update candidates based on the query string
-func updateSelectedIndex(searchQuery *string, keys []string, selectedIndex *int) []string {
-	var filteredKeys []string
-	for _, key := range keys {
-		if fuzzyFind(key, *searchQuery) {
-			filteredKeys = append(filteredKeys, key)
-		}
-	}
-
-	if len(filteredKeys) == 0 {
-		*selectedIndex = -1
-	} else {
-		*selectedIndex = 0
-	}
-
-	return filteredKeys
-}
-
-// fuzzy match function to check if all characters in searchQuery are in key in order
-func fuzzyFind(key, searchQuery string) bool {
-	keyIndex := 0
-	for _, char := range searchQuery {
-		found := false
-		for keyIndex < len(key) {
-			if key[keyIndex] == byte(char) {
-				found = true
-				keyIndex++
-				break
+		case "up", "ctrl+p":
+			if m.selectedIdx > 0 {
+				m.selectedIdx--
+				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+					m.searchQuery = m.filteredKeys[m.selectedIdx]
+				}
+				m.updateTreeContent()
+				m.updateExtractContent()
 			}
-			keyIndex++
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
-}
 
-// Removed displayParsedResult function as it was just returning getParsedResult
-
-func getParsedResult(query string, jsonData []byte) string {
-	if strings.Contains(query, "[]") {
-		return handleArrayQuery(query, jsonData)
-	}
-
-	if strings.Contains(query, "[") && strings.Contains(query, "]") {
-		return handleIndexedQuery(query, jsonData)
-	}
-
-	return handleOrdinaryQuery(query, jsonData)
-}
-
-func handleArrayQuery(query string, jsonData []byte) string {
-	baseQuery := strings.Split(query, "[]")[0]
-	field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
-	arrayResult := gjson.GetBytes(jsonData, baseQuery)
-	if arrayResult.IsArray() {
-		var values []string
-		arrayResult.ForEach(func(_, val gjson.Result) bool {
-			if strings.Contains(field, "[") && strings.Contains(field, "]") {
-				values = append(values, handleNestedArray(val, field)...)
-			} else {
-				values = append(values, val.Get(field).String())
+		case "down", "ctrl+n":
+			if m.selectedIdx < len(m.filteredKeys)-1 {
+				m.selectedIdx++
+				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+					m.searchQuery = m.filteredKeys[m.selectedIdx]
+				}
+				m.updateTreeContent()
+				m.updateExtractContent()
 			}
-			return true
-		})
-		return strings.Join(values, "\n")
-	}
-	return "Query failed. No matching data found."
-}
 
-func handleNestedArray(val gjson.Result, field string) []string {
-	var values []string
-	nestedBase := strings.Split(field, "[")[0]
-	nestedIndex := strings.Split(strings.Split(field, "[")[1], "]")[0]
-	nestedField := ""
-	if strings.Contains(field, "]") {
-		nestedField = strings.TrimPrefix(strings.Split(field, "]")[1], ".")
-	}
-	nestedArray := val.Get(nestedBase)
-	if nestedArray.IsArray() {
-		nestedArray.ForEach(func(index, nestedVal gjson.Result) bool {
-			if index.String() == nestedIndex {
-				if nestedField != "" && strings.Contains(nestedField, "[") && strings.Contains(nestedField, "]") {
-					values = append(values, handleNestedArray(nestedVal, nestedField)...)
-				} else if nestedField != "" {
-					values = append(values, nestedVal.Get(nestedField).String())
-				} else {
-					values = append(values, nestedVal.String())
+		case "enter":
+			if len(m.filteredKeys) > 0 && m.selectedIdx < len(m.filteredKeys) {
+				m.searchQuery = m.filteredKeys[m.selectedIdx]
+			}
+
+		case "backspace", "ctrl+h":
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				m.updateFilteredKeys()
+			}
+
+		default:
+			// Handle character input for search
+			if len(msg.String()) == 1 {
+				char := msg.String()[0]
+				if (char >= 'a' && char <= 'z') ||
+					(char >= 'A' && char <= 'Z') ||
+					(char >= '0' && char <= '9') ||
+					char == '.' || char == '[' || char == ']' ||
+					char == '_' || char == '#' {
+					m.searchQuery += msg.String()
+					m.updateFilteredKeys()
 				}
 			}
-			return true
+		}
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
+		// Calculate dynamic tree width based on content
+		m.calculateTreeWidth()
+
+		if !m.ready {
+			m.treeViewport = viewport.New(m.leftWidth-4, m.height-8)
+			m.extractViewport = viewport.New(m.rightWidth-4, m.height-8)
+			m.ready = true
+		} else {
+			m.treeViewport.Width = m.leftWidth - 4
+			m.treeViewport.Height = m.height - 8
+			m.extractViewport.Width = m.rightWidth - 4
+			m.extractViewport.Height = m.height - 8
+		}
+
+		m.updateTreeContent()
+		m.updateExtractContent()
+	}
+
+	return m, nil
+}
+
+// View renders the UI
+func (m Model) View() string {
+	if !m.ready {
+		return "Initializing..."
+	}
+
+	header := m.renderHeader()
+	main := m.renderMain()
+	footer := m.renderFooter()
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		main,
+		footer,
+	)
+}
+
+// renderHeader renders the header with filename
+func (m Model) renderHeader() string {
+	return headerStyle.Render(fmt.Sprintf("File: %s", m.fileName))
+}
+
+// renderMain renders the main content (left and right panels)
+func (m Model) renderMain() string {
+	leftPanel := m.renderTreePanel()
+	rightPanel := m.renderExtractPanel()
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		leftPanel,
+		rightPanel,
+	)
+}
+
+// renderTreePanel renders the left panel with JSON tree
+func (m Model) renderTreePanel() string {
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true).
+		Render("JSON Tree")
+
+	content := m.treeViewport.View()
+
+	panel := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		content,
+	)
+
+	return treeStyle.
+		Width(m.leftWidth - 4).
+		Height(m.height - 8).
+		Render(panel)
+}
+
+// renderExtractPanel renders the right panel with JSON extraction
+func (m Model) renderExtractPanel() string {
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true).
+		Render("JSON Extractor")
+
+	content := m.extractViewport.View()
+
+	panel := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		content,
+	)
+
+	return extractStyle.
+		Width(m.rightWidth - 4).
+		Height(m.height - 8).
+		Render(panel)
+}
+
+// renderFooter renders the search bar
+func (m Model) renderFooter() string {
+	searchText := fmt.Sprintf("🔍 Search: %s", m.searchQuery)
+	return searchStyle.Render(searchText)
+}
+
+// updateFilteredKeys updates the filtered keys based on search query
+func (m *Model) updateFilteredKeys() {
+	if m.searchQuery == "" {
+		m.filteredKeys = make([]string, len(m.jp.keys))
+		copy(m.filteredKeys, m.jp.keys)
+	} else {
+		m.filteredKeys = []string{}
+		for _, key := range m.jp.keys {
+			if fuzzyFind(key, m.searchQuery) {
+				m.filteredKeys = append(m.filteredKeys, key)
+			}
+		}
+	}
+
+	// Sort filtered keys to group children of the same parent together
+	sortTreeKeys(m.filteredKeys)
+
+	if len(m.filteredKeys) == 0 {
+		m.selectedIdx = -1
+	} else if m.selectedIdx >= len(m.filteredKeys) {
+		m.selectedIdx = 0
+	}
+
+	// Recalculate tree width based on filtered content
+	m.calculateTreeWidth()
+	m.updateTreeContent()
+	m.updateExtractContent()
+}
+
+// updateTreeContent updates the tree viewport content
+func (m *Model) updateTreeContent() {
+	var content strings.Builder
+
+	for i, key := range m.filteredKeys {
+		display := m.formatTreeItem(key, i == m.selectedIdx)
+		content.WriteString(display)
+		content.WriteString("\n")
+	}
+
+	m.treeViewport.SetContent(content.String())
+
+	// Auto-scroll to selected item
+	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+		lineHeight := 1
+		targetLine := m.selectedIdx * lineHeight
+		viewportHeight := m.treeViewport.Height
+
+		// Scroll down if selected item is below viewport
+		if targetLine >= m.treeViewport.YOffset+viewportHeight {
+			m.treeViewport.SetYOffset(targetLine - viewportHeight + 1)
+		}
+		// Scroll up if selected item is above viewport
+		if targetLine < m.treeViewport.YOffset {
+			m.treeViewport.SetYOffset(targetLine)
+		}
+	}
+}
+
+// formatTreeItem formats a tree item with proper indentation and highlighting
+func (m *Model) formatTreeItem(key string, selected bool) string {
+	depth := strings.Count(key, ".") + strings.Count(key, "[")
+	indent := strings.Repeat("  ", depth)
+
+	// Determine the display symbol
+	symbol := "├─"
+
+	// Extract display name with parent context for clarity
+	displayName := getDisplayName(key)
+
+	display := fmt.Sprintf("%s%s %s", indent, symbol, displayName)
+
+	if selected {
+		return selectedItemStyle.Render("> " + display)
+	}
+	return "  " + display
+}
+
+// getDisplayName extracts a meaningful display name from the full key path
+func getDisplayName(key string) string {
+	parts := strings.Split(key, ".")
+	lastPart := parts[len(parts)-1]
+	return lastPart
+}
+
+// updateExtractContent updates the extract viewport content
+func (m *Model) updateExtractContent() {
+	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+		selectedKey := m.filteredKeys[m.selectedIdx]
+		jsonData := getParsedResult(selectedKey, m.jsonData)
+		highlightedJSON := highlightJSON(jsonData)
+		m.extractViewport.SetContent(highlightedJSON)
+	} else {
+		m.extractViewport.SetContent("No item selected")
+	}
+}
+
+// calculateTreeWidth calculates the optimal tree width based on content
+func (m *Model) calculateTreeWidth() {
+	if m.width == 0 {
+		return
+	}
+
+	// Find maximum display width needed for tree items
+	maxWidth := 0
+	for i, key := range m.filteredKeys {
+		display := m.formatTreeItemPlain(key, i == m.selectedIdx)
+		displayWidth := lipgloss.Width(display)
+		if displayWidth > maxWidth {
+			maxWidth = displayWidth
+		}
+	}
+
+	// Add padding for borders and margins
+	neededWidth := maxWidth + 8
+
+	// Calculate percentage based on needed width
+	minWidth := int(float64(m.width) * 0.25) // 25% minimum
+	maxWidthLimit := int(float64(m.width) * 0.60) // 60% maximum
+
+	// Set tree width within bounds
+	if neededWidth < minWidth {
+		m.leftWidth = minWidth
+	} else if neededWidth > maxWidthLimit {
+		m.leftWidth = maxWidthLimit
+	} else {
+		m.leftWidth = neededWidth
+	}
+
+	m.rightWidth = m.width - m.leftWidth - 4
+
+	// Update viewport widths if they exist
+	if m.ready {
+		m.treeViewport.Width = m.leftWidth - 4
+		m.extractViewport.Width = m.rightWidth - 4
+	}
+}
+
+// formatTreeItemPlain formats a tree item without styling for width calculation
+func (m *Model) formatTreeItemPlain(key string, selected bool) string {
+	depth := strings.Count(key, ".") + strings.Count(key, "[")
+	indent := strings.Repeat("  ", depth)
+
+	symbol := "├─"
+
+	displayName := getDisplayName(key)
+
+	display := fmt.Sprintf("%s%s %s", indent, symbol, displayName)
+
+	if selected {
+		return "> " + display
+	}
+	return "  " + display
+}
+
+// sortTreeKeys sorts keys to group children of the same parent together
+func sortTreeKeys(keys []string) {
+	// Simple alphabetical sort will group keys with the same prefix together
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if keys[i] > keys[j] {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+}
+
+// generateTreeItems generates tree items from JSON keys
+func generateTreeItems(keys []string) []TreeItem {
+	items := make([]TreeItem, 0, len(keys))
+
+	for _, key := range keys {
+		depth := strings.Count(key, ".") + strings.Count(key, "[")
+		display := formatKeyAsTree(key)
+
+		items = append(items, TreeItem{
+			key:     key,
+			display: display,
+			depth:   depth,
 		})
 	}
-	return values
+
+	return items
 }
 
-func handleIndexedQuery(query string, jsonData []byte) string {
-	baseQuery, field := splitQuery(query)
-	baseQuery = strings.Replace(baseQuery, "[", ".", -1)
-	baseQuery = strings.Replace(baseQuery, "]", "", -1)
-	arrayResult := gjson.GetBytes(jsonData, baseQuery)
-	if arrayResult.Exists() {
-		if field != "" {
-			if strings.Contains(field, "[") && strings.Contains(field, "]") {
-				return strings.Join(handleNestedIndexedQuery(arrayResult, field), "\n")
-			}
-			return arrayResult.Get(field).String()
-		}
-		return arrayResult.String()
-	}
-	return "Query failed. No matching data found."
+// formatKeyAsTree formats a key as a tree-like display
+func formatKeyAsTree(key string) string {
+	depth := strings.Count(key, ".") + strings.Count(key, "[")
+	indent := strings.Repeat("  ", depth)
+
+	parts := strings.Split(key, ".")
+	lastPart := parts[len(parts)-1]
+
+	return fmt.Sprintf("%s├─ %s", indent, lastPart)
 }
 
-func handleNestedIndexedQuery(arrayResult gjson.Result, field string) []string {
-	fieldBase, fieldField := splitQuery(field)
-	fieldBase = strings.Replace(fieldBase, "[", ".", -1)
-	fieldBase = strings.Replace(fieldBase, "]", "", -1)
-	nestedResult := arrayResult.Get(fieldBase)
-	if nestedResult.Exists() {
-		if fieldField != "" {
-			if strings.Contains(fieldField, "[") && strings.Contains(fieldField, "]") {
-				return handleNestedArray(nestedResult, fieldField)
-			}
-			return []string{nestedResult.Get(fieldField).String()}
-		}
-		return []string{nestedResult.String()}
+// NewBubbleteaModel creates a new Bubbletea model
+func NewBubbleteaModel(jp *JSONProcessor, fileName string) Model {
+	// Sort keys initially
+	sortTreeKeys(jp.keys)
+
+	m := Model{
+		jsonData:     jp.jsonData,
+		fileName:     fileName,
+		jp:           jp,
+		filteredKeys: jp.keys,
+		selectedIdx:  0,
+		searchQuery:  "",
 	}
-	return []string{"Query failed. No matching data found."}
+
+	m.treeItems = generateTreeItems(jp.keys)
+
+	return m
 }
 
-func handleOrdinaryQuery(query string, jsonData []byte) string {
-	result := gjson.GetBytes(jsonData, query)
-	if result.Exists() {
-		if result.IsObject() || result.IsArray() {
-			var prettyJSON bytes.Buffer
-			if err := json.Indent(&prettyJSON, []byte(result.Raw), "", "  "); err == nil {
-				return prettyJSON.String()
-			}
-			return result.Raw
-		}
-		return result.String()
-	}
-	return "Query failed. No matching data found."
-}
+// RunBubbleteaTUI starts the Bubbletea TUI
+func RunBubbleteaTUI(jp *JSONProcessor, fileName string) error {
+	m := NewBubbleteaModel(jp, fileName)
 
-func splitQuery(query string) (string, string) {
-	if dotIndex := strings.Index(query, "."); dotIndex != -1 {
-		return query[:dotIndex], query[dotIndex+1:]
-	}
-	return query, ""
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	_, err := p.Run()
+	return err
 }

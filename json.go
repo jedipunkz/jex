@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/alecthomas/chroma/quick"
 	"github.com/tidwall/gjson"
 )
 
@@ -26,10 +29,20 @@ func (jp *JSONProcessor) extractKeys() {
 		}
 	}
 
-	walk("", gjson.ParseBytes(jp.jsonData))
+	parsed := gjson.ParseBytes(jp.jsonData)
+	walk("", parsed)
+
+	// Get root keys for validation
+	var rootKeys []string
+	if parsed.IsObject() {
+		parsed.ForEach(func(key, _ gjson.Result) bool {
+			rootKeys = append(rootKeys, key.String())
+			return true
+		})
+	}
 
 	// remove invalid keys
-	jp.keys = filterInvalidKeys(jp.keys)
+	jp.keys = filterInvalidKeys(jp.keys, rootKeys)
 }
 
 // processObject processes JSON objects and extracts keys
@@ -92,13 +105,205 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 	}
 }
 
-// remove invalid keys (e.g. "foo[]")
-func filterInvalidKeys(keys []string) []string {
+func filterInvalidKeys(keys []string, rootKeys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
-		if !strings.HasSuffix(key, "[]") { // remove array with '[]' suffix
-			validKeys = append(validKeys, key)
+		// Remove keys ending with "[]"
+		if strings.HasSuffix(key, "[]") {
+			continue
 		}
+
+		if strings.Contains(key, "[]") {
+			continue
+		}
+
+		if len(rootKeys) > 0 {
+			validRoot := false
+			for _, rootKey := range rootKeys {
+				if key == rootKey || strings.HasPrefix(key, rootKey+".") || strings.HasPrefix(key, rootKey+"[") {
+					validRoot = true
+					break
+				}
+			}
+			if !validRoot {
+				continue
+			}
+		}
+
+		validKeys = append(validKeys, key)
 	}
 	return validKeys
+}
+
+// JSON Query and Extraction Functions
+
+// getParsedResult gets the parsed result for a given query
+func getParsedResult(query string, jsonData []byte) string {
+	if strings.Contains(query, "[]") {
+		return handleArrayQuery(query, jsonData)
+	}
+
+	if strings.Contains(query, "[") && strings.Contains(query, "]") {
+		return handleIndexedQuery(query, jsonData)
+	}
+
+	return handleOrdinaryQuery(query, jsonData)
+}
+
+// handleArrayQuery handles queries with [] pattern
+func handleArrayQuery(query string, jsonData []byte) string {
+	baseQuery := strings.Split(query, "[]")[0]
+	field := strings.TrimPrefix(strings.Split(query, "[]")[1], ".")
+	arrayResult := gjson.GetBytes(jsonData, baseQuery)
+	if arrayResult.IsArray() {
+		var values []string
+		arrayResult.ForEach(func(_, val gjson.Result) bool {
+			if strings.Contains(field, "[") && strings.Contains(field, "]") {
+				values = append(values, handleNestedArray(val, field)...)
+			} else if field == "" {
+				// Return entire array element
+				if val.IsObject() || val.IsArray() {
+					var prettyJSON bytes.Buffer
+					if err := json.Indent(&prettyJSON, []byte(val.Raw), "", "  "); err == nil {
+						values = append(values, prettyJSON.String())
+					} else {
+						values = append(values, val.Raw)
+					}
+				} else {
+					values = append(values, val.String())
+				}
+			} else {
+				result := val.Get(field)
+				if result.IsObject() || result.IsArray() {
+					var prettyJSON bytes.Buffer
+					if err := json.Indent(&prettyJSON, []byte(result.Raw), "", "  "); err == nil {
+						values = append(values, prettyJSON.String())
+					} else {
+						values = append(values, result.Raw)
+					}
+				} else {
+					values = append(values, result.String())
+				}
+			}
+			return true
+		})
+		return strings.Join(values, "\n")
+	}
+	return "Query failed. No matching data found."
+}
+
+// handleNestedArray handles nested array queries
+func handleNestedArray(val gjson.Result, field string) []string {
+	var values []string
+	nestedBase := strings.Split(field, "[")[0]
+	nestedIndex := strings.Split(strings.Split(field, "[")[1], "]")[0]
+	nestedField := ""
+	if strings.Contains(field, "]") {
+		nestedField = strings.TrimPrefix(strings.Split(field, "]")[1], ".")
+	}
+	nestedArray := val.Get(nestedBase)
+	if nestedArray.IsArray() {
+		nestedArray.ForEach(func(index, nestedVal gjson.Result) bool {
+			if index.String() == nestedIndex {
+				if nestedField != "" && strings.Contains(nestedField, "[") && strings.Contains(nestedField, "]") {
+					values = append(values, handleNestedArray(nestedVal, nestedField)...)
+				} else if nestedField != "" {
+					result := nestedVal.Get(nestedField)
+					if result.IsObject() || result.IsArray() {
+						var prettyJSON bytes.Buffer
+						if err := json.Indent(&prettyJSON, []byte(result.Raw), "", "  "); err == nil {
+							values = append(values, prettyJSON.String())
+						} else {
+							values = append(values, result.Raw)
+						}
+					} else {
+						values = append(values, result.String())
+					}
+				} else {
+					if nestedVal.IsObject() || nestedVal.IsArray() {
+						var prettyJSON bytes.Buffer
+						if err := json.Indent(&prettyJSON, []byte(nestedVal.Raw), "", "  "); err == nil {
+							values = append(values, prettyJSON.String())
+						} else {
+							values = append(values, nestedVal.Raw)
+						}
+					} else {
+						values = append(values, nestedVal.String())
+					}
+				}
+			}
+			return true
+		})
+	}
+	return values
+}
+
+// handleIndexedQuery handles queries with array indices like [0]
+func handleIndexedQuery(query string, jsonData []byte) string {
+	// Convert query from "company.departments[0].teams[0].members[0]"
+	// to gjson format "company.departments.0.teams.0.members.0"
+	gjsonQuery := strings.ReplaceAll(query, "[", ".")
+	gjsonQuery = strings.ReplaceAll(gjsonQuery, "]", "")
+
+	result := gjson.GetBytes(jsonData, gjsonQuery)
+	if result.Exists() {
+		// Pretty-print objects and arrays
+		if result.IsObject() || result.IsArray() {
+			var prettyJSON bytes.Buffer
+			if err := json.Indent(&prettyJSON, []byte(result.Raw), "", "  "); err == nil {
+				return prettyJSON.String()
+			}
+			return result.Raw
+		}
+		return result.String()
+	}
+	return "Query failed. No matching data found."
+}
+
+// handleOrdinaryQuery handles simple queries without arrays
+func handleOrdinaryQuery(query string, jsonData []byte) string {
+	result := gjson.GetBytes(jsonData, query)
+	if result.Exists() {
+		if result.IsObject() || result.IsArray() {
+			var prettyJSON bytes.Buffer
+			if err := json.Indent(&prettyJSON, []byte(result.Raw), "", "  "); err == nil {
+				return prettyJSON.String()
+			}
+			return result.Raw
+		}
+		return result.String()
+	}
+	return "Query failed. No matching data found."
+}
+
+// Utility Functions
+
+// fuzzyFind checks if all characters in searchQuery are in key in order
+func fuzzyFind(key, searchQuery string) bool {
+	keyIndex := 0
+	for _, char := range searchQuery {
+		found := false
+		for keyIndex < len(key) {
+			if key[keyIndex] == byte(char) {
+				found = true
+				keyIndex++
+				break
+			}
+			keyIndex++
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// highlightJSON applies syntax highlighting to JSON
+func highlightJSON(jsonData string) string {
+	var highlighted bytes.Buffer
+	err := quick.Highlight(&highlighted, jsonData, "json", "terminal", "monokai")
+	if err != nil {
+		return jsonData
+	}
+	return highlighted.String()
 }
