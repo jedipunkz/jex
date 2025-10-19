@@ -422,7 +422,8 @@ func (m *Model) formatTreeItemPlain(key string, selected bool) string {
 	return "  " + display
 }
 
-// sortTreeKeys sorts keys to group children of the same parent together
+// sortTreeKeys sorts keys alphabetically to group related paths together
+// This simple sorting ensures children appear near their parents in the tree
 func sortTreeKeys(keys []string) {
 	// Simple alphabetical sort will group keys with the same prefix together
 	for i := 0; i < len(keys)-1; i++ {
@@ -434,7 +435,8 @@ func sortTreeKeys(keys []string) {
 	}
 }
 
-// generateTreeItems generates tree items from JSON keys
+// generateTreeItems creates TreeItem structs from JSON key paths
+// Note: This function is currently used but the TreeItem structs are not actively used in rendering
 func generateTreeItems(keys []string) []TreeItem {
 	items := make([]TreeItem, 0, len(keys))
 
@@ -452,7 +454,8 @@ func generateTreeItems(keys []string) []TreeItem {
 	return items
 }
 
-// formatKeyAsTree formats a key as a tree-like display
+// formatKeyAsTree formats a key path as a tree-like display string
+// This is used by generateTreeItems but the result is not currently used in active rendering
 func formatKeyAsTree(key string) string {
 	depth := strings.Count(key, ".") + strings.Count(key, "[")
 	indent := strings.Repeat("  ", depth)
@@ -463,7 +466,8 @@ func formatKeyAsTree(key string) string {
 	return fmt.Sprintf("%s├─ %s", indent, lastPart)
 }
 
-// NewBubbleteaModel creates a new Bubbletea model
+// NewBubbleteaModel creates and initializes a new TUI model with JSON data
+// Sorts keys and sets up initial display state
 func NewBubbleteaModel(jp *JSONProcessor, fileName string) Model {
 	// Sort keys initially
 	sortTreeKeys(jp.keys)
@@ -482,7 +486,8 @@ func NewBubbleteaModel(jp *JSONProcessor, fileName string) Model {
 	return m
 }
 
-// RunBubbleteaTUI starts the Bubbletea TUI
+// RunBubbleteaTUI initializes and starts the terminal UI application
+// Returns an error if the TUI fails to run
 func RunBubbleteaTUI(jp *JSONProcessor, fileName string) error {
 	m := NewBubbleteaModel(jp, fileName)
 
