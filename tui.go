@@ -9,67 +9,72 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Styles
+// Styles define the visual appearance of UI components
 var (
+	// headerStyle styles the top header bar showing the filename
 	headerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FAFAFA")).
 			Background(lipgloss.Color("#7D56F4")).
 			Padding(0, 1).
 			Bold(true)
 
+	// treeStyle styles the left panel containing the JSON tree structure
 	treeStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#874BFD")).
 			Padding(1, 2)
 
+	// extractStyle styles the right panel showing extracted JSON values
 	extractStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#874BFD")).
 			Padding(1, 2)
 
+	// searchStyle styles the search input bar at the bottom
 	searchStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFA500")).
 			Padding(0, 1)
 
+	// selectedItemStyle highlights the currently selected tree item
 	selectedItemStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FFFF00")).
 				Bold(true)
 )
 
-// TreeItem represents an item in the JSON tree
+// TreeItem represents an item in the JSON tree structure
+// Each item contains its key path, display format, and nesting depth
 type TreeItem struct {
-	key     string
-	display string
-	depth   int
+	key     string // Full JSON path (e.g., "user.address.city")
+	display string // Formatted display text with tree symbols
+	depth   int    // Nesting level in the JSON hierarchy
 }
 
-// Model represents the application state
+// Model represents the complete application state for the TUI
+// It manages JSON data, tree navigation, search functionality, and UI layout
 type Model struct {
-	// JSON data
-	jsonData []byte
-	fileName string
+	// JSON data and processing
+	jsonData []byte         // Raw JSON input data
+	fileName string         // Source filename or "stdin"
+	jp       *JSONProcessor // JSON processor for key extraction and queries
 
-	// JSON Processor
-	jp *JSONProcessor
+	// Tree navigation state
+	treeItems   []TreeItem // All tree items generated from JSON keys
+	selectedIdx int        // Currently selected item index
+	filteredKeys []string  // Keys matching current search query
 
-	// Tree state
-	treeItems   []TreeItem
-	selectedIdx int
+	// Search functionality
+	searchQuery string // Current search/filter text
 
-	// Search state
-	searchQuery  string
-	filteredKeys []string
+	// UI dimensions and state
+	width      int  // Terminal width
+	height     int  // Terminal height
+	leftWidth  int  // Width of left panel (tree)
+	rightWidth int  // Width of right panel (extractor)
+	ready      bool // Whether UI is initialized
 
-	// UI state
-	width       int
-	height      int
-	leftWidth   int
-	rightWidth  int
-	ready       bool
-
-	// Viewports
-	treeViewport    viewport.Model
-	extractViewport viewport.Model
+	// Viewports for scrollable content
+	treeViewport    viewport.Model // Scrollable tree view
+	extractViewport viewport.Model // Scrollable extraction view
 }
 
 // Init initializes the model
@@ -81,55 +86,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
-
-		case "up", "ctrl+p":
-			if m.selectedIdx > 0 {
-				m.selectedIdx--
-				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
-					m.searchQuery = m.filteredKeys[m.selectedIdx]
-				}
-				m.updateTreeContent()
-				m.updateExtractContent()
-			}
-
-		case "down", "ctrl+n":
-			if m.selectedIdx < len(m.filteredKeys)-1 {
-				m.selectedIdx++
-				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
-					m.searchQuery = m.filteredKeys[m.selectedIdx]
-				}
-				m.updateTreeContent()
-				m.updateExtractContent()
-			}
-
-		case "enter":
-			if len(m.filteredKeys) > 0 && m.selectedIdx < len(m.filteredKeys) {
-				m.searchQuery = m.filteredKeys[m.selectedIdx]
-			}
-
-		case "backspace", "ctrl+h":
-			if len(m.searchQuery) > 0 {
-				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
-				m.updateFilteredKeys()
-			}
-
-		default:
-			// Handle character input for search
-			if len(msg.String()) == 1 {
-				char := msg.String()[0]
-				if (char >= 'a' && char <= 'z') ||
-					(char >= 'A' && char <= 'Z') ||
-					(char >= '0' && char <= '9') ||
-					char == '.' || char == '[' || char == ']' ||
-					char == '_' || char == '#' {
-					m.searchQuery += msg.String()
-					m.updateFilteredKeys()
-				}
-			}
-		}
+		return m.handleKeyPress(msg)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -154,6 +111,94 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleKeyPress processes keyboard input and updates the model accordingly
+// This separates key handling logic from the main Update function for better maintainability
+func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+
+	case "up", "ctrl+p":
+		return m.handleNavigationUp(), nil
+
+	case "down", "ctrl+n":
+		return m.handleNavigationDown(), nil
+
+	case "enter":
+		return m.handleEnterKey(), nil
+
+	case "backspace", "ctrl+h":
+		return m.handleBackspace(), nil
+
+	default:
+		return m.handleCharacterInput(msg), nil
+	}
+}
+
+// handleNavigationUp moves the selection up in the tree
+func (m Model) handleNavigationUp() Model {
+	if m.selectedIdx > 0 {
+		m.selectedIdx--
+		if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+			m.searchQuery = m.filteredKeys[m.selectedIdx]
+		}
+		m.updateTreeContent()
+		m.updateExtractContent()
+	}
+	return m
+}
+
+// handleNavigationDown moves the selection down in the tree
+func (m Model) handleNavigationDown() Model {
+	if m.selectedIdx < len(m.filteredKeys)-1 {
+		m.selectedIdx++
+		if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
+			m.searchQuery = m.filteredKeys[m.selectedIdx]
+		}
+		m.updateTreeContent()
+		m.updateExtractContent()
+	}
+	return m
+}
+
+// handleEnterKey confirms the current selection
+func (m Model) handleEnterKey() Model {
+	if len(m.filteredKeys) > 0 && m.selectedIdx < len(m.filteredKeys) {
+		m.searchQuery = m.filteredKeys[m.selectedIdx]
+	}
+	return m
+}
+
+// handleBackspace removes the last character from the search query
+func (m Model) handleBackspace() Model {
+	if len(m.searchQuery) > 0 {
+		m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+		m.updateFilteredKeys()
+	}
+	return m
+}
+
+// handleCharacterInput processes character input for search
+func (m Model) handleCharacterInput(msg tea.KeyMsg) Model {
+	if len(msg.String()) == 1 {
+		char := msg.String()[0]
+		if isValidSearchChar(char) {
+			m.searchQuery += msg.String()
+			m.updateFilteredKeys()
+		}
+	}
+	return m
+}
+
+// isValidSearchChar checks if a character is valid for search input
+func isValidSearchChar(char byte) bool {
+	return (char >= 'a' && char <= 'z') ||
+		(char >= 'A' && char <= 'Z') ||
+		(char >= '0' && char <= '9') ||
+		char == '.' || char == '[' || char == ']' ||
+		char == '_' || char == '#'
 }
 
 // View renders the UI
@@ -191,46 +236,34 @@ func (m Model) renderMain() string {
 	)
 }
 
-// renderTreePanel renders the left panel with JSON tree
-func (m Model) renderTreePanel() string {
-	title := lipgloss.NewStyle().
+// createPanel creates a styled panel with title and content
+// This common function reduces code duplication between tree and extract panels
+func createPanel(title string, content string, style lipgloss.Style, width, height int) string {
+	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#7D56F4")).
 		Bold(true).
-		Render("JSON Tree")
-
-	content := m.treeViewport.View()
+		Render(title)
 
 	panel := lipgloss.JoinVertical(
 		lipgloss.Left,
-		title,
+		titleStyle,
 		content,
 	)
 
-	return treeStyle.
-		Width(m.leftWidth - 4).
-		Height(m.height - 8).
+	return style.
+		Width(width - 4).
+		Height(height - 8).
 		Render(panel)
+}
+
+// renderTreePanel renders the left panel with JSON tree
+func (m Model) renderTreePanel() string {
+	return createPanel("JSON Tree", m.treeViewport.View(), treeStyle, m.leftWidth, m.height)
 }
 
 // renderExtractPanel renders the right panel with JSON extraction
 func (m Model) renderExtractPanel() string {
-	title := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
-		Bold(true).
-		Render("JSON Extractor")
-
-	content := m.extractViewport.View()
-
-	panel := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		content,
-	)
-
-	return extractStyle.
-		Width(m.rightWidth - 4).
-		Height(m.height - 8).
-		Render(panel)
+	return createPanel("JSON Extractor", m.extractViewport.View(), extractStyle, m.rightWidth, m.height)
 }
 
 // renderFooter renders the search bar
@@ -239,7 +272,8 @@ func (m Model) renderFooter() string {
 	return searchStyle.Render(searchText)
 }
 
-// updateFilteredKeys updates the filtered keys based on search query
+// updateFilteredKeys filters the JSON keys based on the current search query
+// Uses fuzzy matching to find keys containing the search characters in order
 func (m *Model) updateFilteredKeys() {
 	if m.searchQuery == "" {
 		m.filteredKeys = make([]string, len(m.jp.keys))
@@ -268,7 +302,8 @@ func (m *Model) updateFilteredKeys() {
 	m.updateExtractContent()
 }
 
-// updateTreeContent updates the tree viewport content
+// updateTreeContent refreshes the tree viewport with current filtered keys
+// Automatically scrolls to keep the selected item visible
 func (m *Model) updateTreeContent() {
 	var content strings.Builder
 
@@ -299,21 +334,21 @@ func (m *Model) updateTreeContent() {
 
 // formatTreeItem formats a tree item with proper indentation and highlighting
 func (m *Model) formatTreeItem(key string, selected bool) string {
-	depth := strings.Count(key, ".") + strings.Count(key, "[")
-	indent := strings.Repeat("  ", depth)
-
-	// Determine the display symbol
-	symbol := "├─"
-
-	// Extract display name with parent context for clarity
-	displayName := getDisplayName(key)
-
-	display := fmt.Sprintf("%s%s %s", indent, symbol, displayName)
-
+	display := m.buildTreeItemDisplay(key)
 	if selected {
 		return selectedItemStyle.Render("> " + display)
 	}
 	return "  " + display
+}
+
+// buildTreeItemDisplay builds the display string for a tree item
+// This shared function eliminates duplication between formatTreeItem and formatTreeItemPlain
+func (m *Model) buildTreeItemDisplay(key string) string {
+	depth := strings.Count(key, ".") + strings.Count(key, "[")
+	indent := strings.Repeat("  ", depth)
+	symbol := "├─"
+	displayName := getDisplayName(key)
+	return fmt.Sprintf("%s%s %s", indent, symbol, displayName)
 }
 
 // getDisplayName extracts a meaningful display name from the full key path
@@ -323,7 +358,8 @@ func getDisplayName(key string) string {
 	return lastPart
 }
 
-// updateExtractContent updates the extract viewport content
+// updateExtractContent refreshes the extract viewport with the selected key's JSON value
+// Shows syntax-highlighted JSON for the currently selected item
 func (m *Model) updateExtractContent() {
 	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
 		selectedKey := m.filteredKeys[m.selectedIdx]
@@ -335,7 +371,8 @@ func (m *Model) updateExtractContent() {
 	}
 }
 
-// calculateTreeWidth calculates the optimal tree width based on content
+// calculateTreeWidth dynamically adjusts the tree panel width based on content
+// Ensures the tree is wide enough to display items but doesn't take too much space
 func (m *Model) calculateTreeWidth() {
 	if m.width == 0 {
 		return
@@ -378,15 +415,7 @@ func (m *Model) calculateTreeWidth() {
 
 // formatTreeItemPlain formats a tree item without styling for width calculation
 func (m *Model) formatTreeItemPlain(key string, selected bool) string {
-	depth := strings.Count(key, ".") + strings.Count(key, "[")
-	indent := strings.Repeat("  ", depth)
-
-	symbol := "├─"
-
-	displayName := getDisplayName(key)
-
-	display := fmt.Sprintf("%s%s %s", indent, symbol, displayName)
-
+	display := m.buildTreeItemDisplay(key)
 	if selected {
 		return "> " + display
 	}

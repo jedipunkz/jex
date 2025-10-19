@@ -10,14 +10,16 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// JSONProcessor handles extraction and querying of JSON data
+// It maintains the raw JSON bytes and extracted key paths
 type JSONProcessor struct {
-	jsonData []byte
-	keys     []string
+	jsonData []byte   // Raw JSON data
+	keys     []string // Extracted key paths from the JSON structure
 }
 
-// JSONProcessor extract keys from JSON data
-// seenKeys is used to prevent duplicate keys
-// walk is a recursive function to walk through JSON data
+// extractKeys traverses the JSON structure and extracts all accessible key paths
+// Uses a recursive walk function to handle nested objects and arrays
+// Filters out invalid keys and prevents duplicate entries
 func (jp *JSONProcessor) extractKeys() {
 	seenKeys := make(map[string]struct{})
 	var walk func(prefix string, value gjson.Result)
@@ -45,7 +47,8 @@ func (jp *JSONProcessor) extractKeys() {
 	jp.keys = filterInvalidKeys(jp.keys, rootKeys)
 }
 
-// processObject processes JSON objects and extracts keys
+// processObject recursively processes JSON objects and extracts all nested key paths
+// Prevents duplicate keys using the seenKeys map and maintains proper path prefixes
 func (jp *JSONProcessor) processObject(prefix string, value gjson.Result, seenKeys map[string]struct{}, walk func(string, gjson.Result)) {
 	value.ForEach(func(key, val gjson.Result) bool {
 		fullKey := key.String()
@@ -61,7 +64,8 @@ func (jp *JSONProcessor) processObject(prefix string, value gjson.Result, seenKe
 	})
 }
 
-// processArray processes JSON arrays and extracts keys
+// processArray recursively processes JSON arrays and extracts indexed and wildcard key paths
+// Generates both specific indices (e.g., foo[0]) and array patterns (e.g., foo.# and foo[].bar)
 func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKeys map[string]struct{}, walk func(string, gjson.Result)) {
 	arrayKey := fmt.Sprintf("%s.#", prefix)
 	if _, exists := seenKeys[arrayKey]; !exists {
@@ -105,6 +109,9 @@ func (jp *JSONProcessor) processArray(prefix string, value gjson.Result, seenKey
 	}
 }
 
+// filterInvalidKeys removes keys that don't match valid patterns or root keys
+// Filters out keys ending with "[]" or containing "[]" in the middle
+// Also validates that keys have a proper root when rootKeys are provided
 func filterInvalidKeys(keys []string, rootKeys []string) []string {
 	var validKeys []string
 	for _, key := range keys {
@@ -137,7 +144,8 @@ func filterInvalidKeys(keys []string, rootKeys []string) []string {
 
 // JSON Query and Extraction Functions
 
-// getParsedResult gets the parsed result for a given query
+// getParsedResult retrieves and formats the JSON value for a given query path
+// Handles different query types: array patterns (with []), indexed access, and simple paths
 func getParsedResult(query string, jsonData []byte) string {
 	if strings.Contains(query, "[]") {
 		return handleArrayQuery(query, jsonData)
@@ -278,7 +286,8 @@ func handleOrdinaryQuery(query string, jsonData []byte) string {
 
 // Utility Functions
 
-// fuzzyFind checks if all characters in searchQuery are in key in order
+// fuzzyFind performs fuzzy matching to check if all characters in searchQuery
+// appear in the key string in the same order (not necessarily consecutively)
 func fuzzyFind(key, searchQuery string) bool {
 	keyIndex := 0
 	for _, char := range searchQuery {
@@ -298,7 +307,8 @@ func fuzzyFind(key, searchQuery string) bool {
 	return true
 }
 
-// highlightJSON applies syntax highlighting to JSON
+// highlightJSON applies syntax highlighting to JSON strings using Chroma
+// Returns the original string if highlighting fails
 func highlightJSON(jsonData string) string {
 	var highlighted bytes.Buffer
 	err := quick.Highlight(&highlighted, jsonData, "json", "terminal", "monokai")
