@@ -57,6 +57,6 @@ jobs:
         uses: actions/checkout@master
 
       - name: Golangci-Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
