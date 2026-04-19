@@ -251,7 +251,7 @@ func (m Model) renderExtractPanel() string {
 
 // renderFooter renders the search bar
 func (m Model) renderFooter() string {
-	searchText := fmt.Sprintf("🔍 Search: %s", m.searchQuery)
+	searchText := fmt.Sprintf("Search: %s", m.searchQuery)
 	return searchStyle.Render(searchText)
 }
 
