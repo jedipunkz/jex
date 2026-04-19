@@ -71,6 +71,7 @@ type Model struct {
 
 	// Search state
 	searchQuery  string
+	searchCursor int
 	filteredKeys []string
 
 	// UI state
@@ -103,6 +104,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedIdx--
 				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
 					m.searchQuery = m.filteredKeys[m.selectedIdx]
+					m.searchCursor = len(m.searchQuery)
 				}
 				m.updateTreeContent()
 				m.updateExtractContent()
@@ -113,21 +115,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedIdx++
 				if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
 					m.searchQuery = m.filteredKeys[m.selectedIdx]
+					m.searchCursor = len(m.searchQuery)
 				}
 				m.updateTreeContent()
 				m.updateExtractContent()
 			}
 
 		case "enter":
-			if len(m.filteredKeys) > 0 && m.selectedIdx < len(m.filteredKeys) {
-				m.searchQuery = m.filteredKeys[m.selectedIdx]
-			}
+			// no-op: selection already tracked by selectedIdx
 
 		case "backspace", "ctrl+h":
-			if len(m.searchQuery) > 0 {
-				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			if len(m.searchQuery) > 0 && m.searchCursor > 0 {
+				m.searchQuery = m.searchQuery[:m.searchCursor-1] + m.searchQuery[m.searchCursor:]
+				m.searchCursor--
 				m.updateFilteredKeys()
 			}
+
+		// Emacs keybindings for search input
+		case "ctrl+a":
+			m.searchCursor = 0
+
+		case "ctrl+e":
+			m.searchCursor = len(m.searchQuery)
+
+		case "ctrl+b":
+			if m.searchCursor > 0 {
+				m.searchCursor--
+			}
+
+		case "ctrl+f":
+			if m.searchCursor < len(m.searchQuery) {
+				m.searchCursor++
+			}
+
+		case "ctrl+k":
+			m.searchQuery = m.searchQuery[:m.searchCursor]
+			m.updateFilteredKeys()
 
 		default:
 			// Handle character input for search
@@ -138,7 +161,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					(char >= '0' && char <= '9') ||
 					char == '.' || char == '[' || char == ']' ||
 					char == '_' || char == '#' {
-					m.searchQuery += msg.String()
+					m.searchQuery = m.searchQuery[:m.searchCursor] + msg.String() + m.searchQuery[m.searchCursor:]
+					m.searchCursor++
 					m.updateFilteredKeys()
 				}
 			}
@@ -187,6 +211,18 @@ func (m Model) View() tea.View {
 	)
 	v := tea.NewView(content)
 	v.AltScreen = true
+
+	// Position terminal cursor at search bar input position.
+	// searchStyle has Padding(0, 1), so text starts at X=1.
+	// "Search: " is 8 chars, so cursor X = 1 + 8 + searchCursor.
+	cursorX := 1 + 8 + m.searchCursor
+	cursorY := strings.Count(header, "\n") + 1 + strings.Count(main, "\n") + 1
+	v.Cursor = &tea.Cursor{
+		Position: tea.Position{X: cursorX, Y: cursorY},
+		Shape:    tea.CursorBar,
+		Blink:    false,
+	}
+
 	return v
 }
 
