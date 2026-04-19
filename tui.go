@@ -9,30 +9,43 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Tokyo Night color palette
+const (
+	tnBg        = lipgloss.Color("#1a1b26") // background
+	tnFg        = lipgloss.Color("#c0caf5") // foreground
+	tnBlue      = lipgloss.Color("#7aa2f7") // blue
+	tnPurple    = lipgloss.Color("#bb9af7") // purple
+	tnCyan      = lipgloss.Color("#7dcfff") // cyan
+	tnGreen     = lipgloss.Color("#9ece6a") // green
+	tnYellow    = lipgloss.Color("#e0af68") // yellow
+	tnBorder    = lipgloss.Color("#3b4261") // border
+	tnSelection = lipgloss.Color("#283457") // selection
+)
+
 // Styles
 var (
 	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#7D56F4")).
+			Foreground(tnFg).
+			Background(tnSelection).
 			Padding(0, 1).
 			Bold(true)
 
 	treeStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
+			BorderForeground(tnBorder).
 			Padding(1, 2)
 
 	extractStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
+			BorderForeground(tnBorder).
 			Padding(1, 2)
 
 	searchStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFA500")).
+			Foreground(tnYellow).
 			Padding(0, 1)
 
 	selectedItemStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFF00")).
+				Foreground(tnCyan).
 				Bold(true)
 )
 
@@ -197,7 +210,7 @@ func (m Model) renderMain() string {
 // renderTreePanel renders the left panel with JSON tree
 func (m Model) renderTreePanel() string {
 	title := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(tnBlue).
 		Bold(true).
 		Render("JSON Tree")
 
@@ -218,7 +231,7 @@ func (m Model) renderTreePanel() string {
 // renderExtractPanel renders the right panel with JSON extraction
 func (m Model) renderExtractPanel() string {
 	title := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(tnBlue).
 		Bold(true).
 		Render("JSON Extractor")
 
