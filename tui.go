@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -139,14 +139,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calculateTreeWidth()
 
 		if !m.ready {
-			m.treeViewport = viewport.New(m.leftWidth-4, m.height-8)
-			m.extractViewport = viewport.New(m.rightWidth-4, m.height-8)
+			m.treeViewport = viewport.New(viewport.WithWidth(m.leftWidth-4), viewport.WithHeight(m.height-8))
+			m.extractViewport = viewport.New(viewport.WithWidth(m.rightWidth-4), viewport.WithHeight(m.height-8))
 			m.ready = true
 		} else {
-			m.treeViewport.Width = m.leftWidth - 4
-			m.treeViewport.Height = m.height - 8
-			m.extractViewport.Width = m.rightWidth - 4
-			m.extractViewport.Height = m.height - 8
+			m.treeViewport.SetWidth(m.leftWidth - 4)
+			m.treeViewport.SetHeight(m.height - 8)
+			m.extractViewport.SetWidth(m.rightWidth - 4)
+			m.extractViewport.SetHeight(m.height - 8)
 		}
 
 		m.updateTreeContent()
@@ -157,21 +157,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the UI
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if !m.ready {
-		return "Initializing..."
+		return tea.NewView("Initializing...")
 	}
 
 	header := m.renderHeader()
 	main := m.renderMain()
 	footer := m.renderFooter()
 
-	return lipgloss.JoinVertical(
+	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		main,
 		footer,
 	)
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }
 
 // renderHeader renders the header with filename
@@ -284,14 +287,14 @@ func (m *Model) updateTreeContent() {
 	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filteredKeys) {
 		lineHeight := 1
 		targetLine := m.selectedIdx * lineHeight
-		viewportHeight := m.treeViewport.Height
+		viewportHeight := m.treeViewport.Height()
 
 		// Scroll down if selected item is below viewport
-		if targetLine >= m.treeViewport.YOffset+viewportHeight {
+		if targetLine >= m.treeViewport.YOffset()+viewportHeight {
 			m.treeViewport.SetYOffset(targetLine - viewportHeight + 1)
 		}
 		// Scroll up if selected item is above viewport
-		if targetLine < m.treeViewport.YOffset {
+		if targetLine < m.treeViewport.YOffset() {
 			m.treeViewport.SetYOffset(targetLine)
 		}
 	}
@@ -371,8 +374,8 @@ func (m *Model) calculateTreeWidth() {
 
 	// Update viewport widths if they exist
 	if m.ready {
-		m.treeViewport.Width = m.leftWidth - 4
-		m.extractViewport.Width = m.rightWidth - 4
+		m.treeViewport.SetWidth(m.leftWidth - 4)
+		m.extractViewport.SetWidth(m.rightWidth - 4)
 	}
 }
 
@@ -457,7 +460,7 @@ func NewBubbleteaModel(jp *JSONProcessor, fileName string) Model {
 func RunBubbleteaTUI(jp *JSONProcessor, fileName string) error {
 	m := NewBubbleteaModel(jp, fileName)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
 }
